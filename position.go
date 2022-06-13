@@ -11,6 +11,8 @@ type position struct {
 	s  tcell.Screen
 
 	// muCursor, muOffset   sync.RWMutex
+
+	window               int64
 	cursor, offset       int64
 	maxOffset, maxCursor int64
 }
@@ -20,6 +22,13 @@ func (p *position) Reset() {
 	p.cursor, p.maxCursor = 0, 0
 	p.offset, p.maxOffset = 0, 0
 	p.mu.Unlock()
+}
+
+func (p *position) Window() (c int64) {
+	p.mu.RLock()
+	c = p.window
+	p.mu.RUnlock()
+	return
 }
 
 func (p *position) MaxOffset() (c int64) {
@@ -69,12 +78,6 @@ func (p *position) SetMaxOffset(max int64) {
 	p.mu.Unlock()
 }
 
-func (p *position) addCursor(cursor int64) {
-	if new := p.cursor + cursor; new >= 0 && new < p.maxCursor {
-		p.cursor = new
-	}
-}
-
 func (p *position) SetCursor(cursor int64) {
 	p.mu.Lock()
 	p.cursor = cursor
@@ -85,12 +88,6 @@ func (p *position) SetOffset(offset int64) {
 	p.mu.Lock()
 	p.offset = offset
 	p.mu.Unlock()
-}
-
-func (p *position) addOffset(offset int64) {
-	if new := p.offset + offset; new >= 0 && new < p.maxOffset {
-		p.offset = new
-	}
 }
 
 func (p *position) AddCursor(cursor int64) {
@@ -112,4 +109,26 @@ func (p *position) Add(cursor, offset int64) {
 	}
 	p.addOffset(offset)
 	p.mu.Unlock()
+}
+
+func (p *position) addOffset(offset int64) {
+	new := p.offset + offset
+	if new < 0 {
+		p.offset = 0
+	} else if new > p.maxOffset {
+		p.offset = p.maxOffset
+	} else {
+		p.offset = new
+	}
+}
+
+func (p *position) addCursor(cursor int64) {
+	new := p.cursor + cursor
+	if new < 0 {
+		p.cursor = 0
+	} else if new > p.maxCursor {
+		p.cursor = p.maxCursor
+	} else {
+		p.cursor = new
+	}
 }
