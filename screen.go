@@ -24,7 +24,7 @@ type Screen struct {
 	footer *FooterComponent
 }
 
-func NewScreen(ring *Ring) (*Screen, error) {
+func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
 	encoding.Register()
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -37,9 +37,16 @@ func NewScreen(ring *Ring) (*Screen, error) {
 	posi := &position{}
 	posi.SetMaxCursor(ring.lines)
 
-	filec := NewFileComponent(s, input, posi, ring)
-	inputc := NewInputComponent(s, input, 1, 0)
-	footerc := NewFooterComponent(s, posi)
+	var printer Printer
+	if lcfg.NoColor {
+		printer = &RawPrinter{s}
+	} else {
+		printer = &ColorPrinter{s}
+	}
+
+	filec := NewFileComponent(printer, input, posi, ring)
+	inputc := NewInputComponent(printer, input, 1, 0)
+	footerc := NewFooterComponent(s, printer, posi)
 	return &Screen{
 		cupdate: make(chan struct{}, 1),
 		ts:      s,

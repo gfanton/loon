@@ -15,6 +15,8 @@ import (
 type LoonConfig struct {
 	RingSize   int
 	ConfigFile string
+	NoColor    bool
+	NoAnsi     bool
 	Json       bool
 }
 
@@ -30,6 +32,8 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 
 	rootFlagSet.StringVar(&cfg.ConfigFile, "config", defaultLoonConfig, "root config project")
 	rootFlagSet.BoolVar(&cfg.Json, "json", false, "parsed is a json line file")
+	rootFlagSet.BoolVar(&cfg.NoColor, "nocolor", false, "disable color")
+	rootFlagSet.BoolVar(&cfg.NoAnsi, "noansi", false, "do not parse ansi sequence")
 	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring size")
 
 	err := ff.Parse(rootFlagSet, args,
@@ -55,8 +59,6 @@ func main() {
 		panic(err)
 	}
 
-	_ = lcfg
-
 	root := &ffcli.Command{
 		Name:    "project [flags] <subcommand>",
 		FlagSet: rootFlagSet,
@@ -79,12 +81,13 @@ func main() {
 				Path:  path,
 			}
 
-			ring, err := file.NewRing(int(lcfg.RingSize))
+			fmt.Printf("%+v\n", lcfg)
+			ring, err := file.NewRing(lcfg)
 			if err != nil {
 				return fmt.Errorf("unable to init ring: %w", err)
 			}
 
-			s, err := NewScreen(ring)
+			s, err := NewScreen(lcfg, ring)
 			if err != nil {
 				return err
 			}

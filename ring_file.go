@@ -20,10 +20,11 @@ type File struct {
 	Path  string
 }
 
-func (f *File) NewRing(size int) (*Ring, error) {
+func (f *File) NewRing(lcfg *LoonConfig) (*Ring, error) {
 	var lines int64
 	var reader Reader
 
+	size := lcfg.RingSize
 	ring := ring.New(size)
 	if !f.Stdin {
 		var fsize, cursor int64
@@ -60,7 +61,15 @@ func (f *File) NewRing(size int) (*Ring, error) {
 		reader = &PipeReader{file}
 	}
 
+	var parser Parser
+	if lcfg.NoAnsi {
+		parser = &RawParser{}
+	} else {
+		parser = &ANSIParser{NoColor: lcfg.NoColor}
+	}
+
 	return &Ring{
+		parser:     parser,
 		updateRing: make(chan struct{}),
 		ringSize:   int(size),
 		ring:       ring,

@@ -4,6 +4,7 @@ go 1.17
 
 require (
 	github.com/gdamore/tcell/v2 v2.5.1
+	github.com/leaanthony/go-ansi-parser v1.5.0
 	github.com/mattn/go-runewidth v0.0.13
 	github.com/nxadm/tail v1.4.8
 	github.com/oklog/run v1.1.0

@@ -12,21 +12,22 @@ type Ring struct {
 	muRing     sync.RWMutex
 	lines      int64
 
+	parser Parser
 	reader Reader
 }
 
 type LineMatching struct {
-	lines           []string
+	lines           []Line
 	size, maxoffset int
 }
 
-func (r *Ring) FindLine(max int, cursor int64, match func(line string) bool) *LineMatching {
-	buffer := make([]string, max)
+func (r *Ring) FindLine(nlimit int, cursor int64, match func(string) bool) *LineMatching {
+	Line := make([]Line, nlimit)
 
 	var seek int64
-	var maxoffset, size int
+	var maxoffset, n int
 	r.muRing.RLock()
-	for p := r.ring.Prev(); p != r.ring && size < max; p = p.Prev() {
+	for p := r.ring.Prev(); p != r.ring && n < nlimit; p = p.Prev() {
 		if p.Value == nil {
 			break
 		}
@@ -36,12 +37,11 @@ func (r *Ring) FindLine(max int, cursor int64, match func(line string) bool) *Li
 			if seek < cursor {
 				seek++
 			} else {
-
-				buffer[size] = line
-				size++
-
-				if len(line) > maxoffset {
-					maxoffset = len(line)
+				pline := r.parser.Parse(line)
+				Line[n] = pline
+				n++
+				if pline.Len() > maxoffset {
+					maxoffset = pline.Len()
 				}
 			}
 		}
@@ -49,8 +49,8 @@ func (r *Ring) FindLine(max int, cursor int64, match func(line string) bool) *Li
 	r.muRing.RUnlock()
 
 	return &LineMatching{
-		lines:     buffer,
-		size:      size,
+		lines:     Line,
+		size:      n,
 		maxoffset: maxoffset,
 	}
 

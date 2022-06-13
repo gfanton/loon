@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -8,7 +9,7 @@ import (
 )
 
 type FileComponent struct {
-	s tcell.Screen
+	printer Printer
 
 	muWindow sync.Mutex
 	window   int64
@@ -18,12 +19,12 @@ type FileComponent struct {
 	ring  *Ring
 }
 
-func NewFileComponent(s tcell.Screen, in *Input, p *position, ring *Ring) *FileComponent {
+func NewFileComponent(print Printer, in *Input, pos *position, ring *Ring) *FileComponent {
 	return &FileComponent{
-		s:     s,
-		input: in,
-		ring:  ring,
-		pos:   p,
+		printer: print,
+		input:   in,
+		ring:    ring,
+		pos:     pos,
 	}
 }
 
@@ -67,14 +68,17 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 	pointer := cursor - window
 
 	for i, line := range match.lines {
+		if line == nil {
+			break
+		}
+
 		nline := y + start - i - 1
 		if i == int(pointer) && offset == 0 {
-			emitStr(f.s, x, nline, tcell.StyleDefault, ">")
-			// off := fmt.Sprintf(" -- yoffset: %d, wy: %d, pointer: %d", yoffset, f.window, pointer)
-			// emitStr(f.s, len(line)+1, nline, tcell.StyleDefault, off)
+			f.printer.Print(x, nline, tcell.StyleDefault, ">")
+			off := fmt.Sprintf(" -- yoffset: %d, wy: %d, pointer: %d", yoffset, f.window, pointer)
+			f.printer.Print(line.Len()+1, nline, tcell.StyleDefault, off)
 		}
-		if int(offset) < len(line) {
-			emitStr(f.s, x+1, nline, tcell.StyleDefault, line[offset:])
-		}
+
+		line.Print(f.printer, x+1, nline, width, int(offset))
 	}
 }

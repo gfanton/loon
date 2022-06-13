@@ -7,13 +7,24 @@ import (
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
-	"github.com/mattn/go-runewidth"
+	ansi "github.com/leaanthony/go-ansi-parser"
 )
 
 var (
 	homeDir  string
 	homeOnce sync.Once
+
+	defaultParseOptions []ansi.ParseOption
 )
+
+func init() {
+	defaultParseOptions = append(defaultParseOptions,
+		ansi.WithDefaultBackgroundColor("black"),
+	)
+	defaultParseOptions = append(defaultParseOptions,
+		ansi.WithDefaultForegroundColor("white"),
+	)
+}
 
 func getHomedirectory() string {
 	homeOnce.Do(func() {
@@ -38,16 +49,52 @@ func expandPath(path string) string {
 	return path
 }
 
-func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
-	for _, c := range str {
-		var comb []rune
-		w := runewidth.RuneWidth(c)
-		if w == 0 {
-			comb = []rune{c}
-			c = ' '
-			w = 1
-		}
-		s.SetContent(x, y, c, comb, style)
-		x += w
+// func emitANSIStr(s tcell.Screen, x, y int, str string) (index int) {
+// 	st, err := ansi.Parse(str)
+// 	if err != nil {
+// 		st = []*ansi.StyledText{{Label: str}}
+// 	}
+
+// 	for _, t := range st {
+// 		style := styledcell(t)
+// 		x = emitStr(s, x, y, style, t.Label)
+// 	}
+// 	return x
+// }
+
+func styledcell(as *ansi.StyledText) (ts tcell.Style) {
+	ts = tcell.StyleDefault
+	if as == nil {
+		return
 	}
+
+	if as.BgCol != nil {
+		name := strings.TrimRight(strings.ToLower(as.BgCol.Name), "123456789")
+		if c, ok := tcell.ColorNames[name]; ok {
+			ts = ts.Background(c)
+		} else {
+			ts = ts.Background(tcell.NewRGBColor(
+				int32(as.BgCol.Rgb.R), int32(as.BgCol.Rgb.G), int32(as.BgCol.Rgb.B),
+			))
+		}
+	}
+
+	if as.FgCol != nil {
+		name := strings.TrimRight(strings.ToLower(as.FgCol.Name), "123456789")
+		if c, ok := tcell.ColorNames[name]; ok {
+			ts = ts.Foreground(c)
+		} else {
+			ts = ts.Foreground(tcell.NewRGBColor(
+				int32(as.FgCol.Rgb.R), int32(as.FgCol.Rgb.G), int32(as.FgCol.Rgb.B),
+			))
+		}
+	}
+
+	return ts.
+		Italic(as.Italic()).
+		Bold(as.Bold()).
+		Underline(as.Underlined()).
+		Reverse(as.Inversed()).
+		Blink(as.Blinking()).
+		StrikeThrough(as.Strikethrough())
 }
