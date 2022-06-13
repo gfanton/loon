@@ -21,6 +21,14 @@ type LineMatching struct {
 	size, maxoffset int
 }
 
+func (r *Ring) Clear() {
+	r.muRing.Lock()
+	r.lines = 0
+	r.ring.Value = nil
+	r.ring = r.ring.Next()
+	r.muRing.Unlock()
+}
+
 func (r *Ring) FindLine(nlimit int, cursor int64, match func(string) bool) *LineMatching {
 	Line := make([]Line, nlimit)
 

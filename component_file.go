@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 
@@ -56,7 +55,9 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 		return true
 	})
 
-	f.pos.SetMaxOffset(int64(match.maxoffset))
+	if maxoffset := (int64(match.maxoffset) - int64(width)) + 2; maxoffset > 0 {
+		f.pos.SetMaxOffset(maxoffset)
+	}
 
 	if match.size < height {
 		f.pos.SetMaxCursor(int64(match.size))
@@ -73,10 +74,10 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 		}
 
 		nline := y + start - i - 1
-		if i == int(pointer) && offset == 0 {
+		if i == int(pointer) {
 			f.printer.Print(x, nline, tcell.StyleDefault, ">")
-			off := fmt.Sprintf(" -- yoffset: %d, wy: %d, pointer: %d", yoffset, f.window, pointer)
-			f.printer.Print(line.Len()+1, nline, tcell.StyleDefault, off)
+			// off := fmt.Sprintf(" -- yoffset: %d, wy: %d, pointer: %d", yoffset, f.window, pointer)
+			// f.printer.Print(line.Len()+1, nline, tcell.StyleDefault, off)
 		}
 
 		line.Print(f.printer, x+1, nline, width, int(offset))

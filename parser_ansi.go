@@ -52,10 +52,6 @@ func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 			continue
 		}
 
-		if to > width {
-			to = width
-		}
-
 		from := s.Index
 		if offset >= from && offset < to {
 			from = offset

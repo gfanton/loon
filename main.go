@@ -81,7 +81,6 @@ func main() {
 				Path:  path,
 			}
 
-			fmt.Printf("%+v\n", lcfg)
 			ring, err := file.NewRing(lcfg)
 			if err != nil {
 				return fmt.Errorf("unable to init ring: %w", err)
@@ -100,6 +99,7 @@ func main() {
 	processCtx, processCancel := context.WithCancel(context.Background())
 	var process run.Group
 	{
+
 		// add root command to process
 		process.Add(func() error {
 			return root.ParseAndRun(processCtx, args)

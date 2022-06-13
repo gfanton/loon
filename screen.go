@@ -12,7 +12,7 @@ type Screen struct {
 	ts      tcell.Screen
 	cupdate chan struct{}
 
-	muPosi sync.RWMutex
+	muScreen sync.RWMutex
 
 	posi  *position
 	input *Input
@@ -61,12 +61,22 @@ func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
 	}, nil
 }
 
+func (s *Screen) Clear() {
+	s.muScreen.Lock()
+	s.ring.Clear()
+	s.posi.Reset()
+	s.Redraw()
+	s.muScreen.Unlock()
+
+}
+
 func (s *Screen) readfile() {
 	for {
 		_, err := s.ring.Readline()
 		if err != nil {
 			return
 		}
+		s.muScreen.RLock()
 
 		_, h := s.ts.Size()
 		s.posi.SetMaxCursor(s.ring.Lines())
@@ -76,7 +86,10 @@ func (s *Screen) readfile() {
 				s.file.IncWindow(1)
 			}
 		}
+
 		s.Redraw()
+
+		s.muScreen.RUnlock()
 	}
 }
 
@@ -143,23 +156,25 @@ func (s *Screen) handleEventMouse(ev *tcell.EventMouse) {
 }
 
 func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
+	var factor int64
+	switch {
+	case ev.Modifiers()&tcell.ModCtrl != 0:
+		return s.handleCtrlCommand(ev)
+	case ev.Modifiers()&tcell.ModAlt != 0:
+		factor = 5
+	default:
+		factor = 1
+	}
+
 	switch ev.Key() {
 	case tcell.KeyUp:
-		s.posi.AddCursor(1)
-	case tcell.KeyUpRight:
-		s.posi.Add(1, 1)
+		s.posi.AddCursor(1 * factor)
 	case tcell.KeyRight:
-		s.posi.AddOffset(2)
-	case tcell.KeyDownRight:
-		s.posi.Add(-1, 1)
+		s.posi.AddOffset(2 * factor)
 	case tcell.KeyDown:
-		s.posi.AddCursor(-1)
-	case tcell.KeyDownLeft:
-		s.posi.Add(-1, -1)
+		s.posi.AddCursor(-1 * factor)
 	case tcell.KeyLeft:
-		s.posi.AddOffset(-2)
-	case tcell.KeyUpLeft:
-		s.posi.Add(1, -1)
+		s.posi.AddOffset(-2 * factor)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		s.input.DeleteBackward()
 	case tcell.KeyEnter:
@@ -172,6 +187,21 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 		} else {
 			return nil
 		}
+	}
+
+	s.Redraw()
+	return nil
+}
+
+func (s *Screen) handleCtrlCommand(ev *tcell.EventKey) error {
+	switch ev.Key() {
+	case tcell.KeyCtrlE:
+		s.posi.SetOffset(s.posi.MaxOffset())
+	case tcell.KeyCtrlA:
+		s.posi.SetOffset(0)
+	case tcell.KeyCtrlL:
+		s.Clear()
+	default:
 	}
 
 	s.Redraw()

@@ -15,6 +15,27 @@ type position struct {
 	maxOffset, maxCursor int64
 }
 
+func (p *position) Reset() {
+	p.mu.Lock()
+	p.cursor, p.maxCursor = 0, 0
+	p.offset, p.maxOffset = 0, 0
+	p.mu.Unlock()
+}
+
+func (p *position) MaxOffset() (c int64) {
+	p.mu.RLock()
+	c = p.maxOffset
+	p.mu.RUnlock()
+	return
+}
+
+func (p *position) MaxCursor() (c int64) {
+	p.mu.RLock()
+	c = p.maxCursor
+	p.mu.RUnlock()
+	return
+}
+
 func (p *position) Cursor() (c int64) {
 	p.mu.RLock()
 	c = p.cursor
