@@ -1,85 +1,123 @@
 package main
 
 import (
-	"strings"
+	"fmt"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 type FileComponent struct {
+	input   *Input
+	buffer  *Buffer
 	printer Printer
 
-	muWindow sync.Mutex
-	window   int64
-
-	input *Input
-	pos   *position
-	ring  *Ring
+	muPosition   sync.Mutex
+	x, y         int
+	currentLines int64
 }
 
-func NewFileComponent(print Printer, in *Input, pos *position, ring *Ring) *FileComponent {
+func NewFileComponent(print Printer, in *Input, ring *Buffer) *FileComponent {
 	return &FileComponent{
 		printer: print,
 		input:   in,
-		ring:    ring,
-		pos:     pos,
+		buffer:  ring,
 	}
 }
 
-func (f *FileComponent) IncWindow(y int64) {
-	f.muWindow.Lock()
-	f.window += y
-	f.muWindow.Unlock()
+func (f *FileComponent) ResetPosition() {
+	f.muPosition.Lock()
+	f.x, f.y = 0, 0
+	f.buffer.ResetCursor()
+	f.muPosition.Unlock()
+}
+
+func (f *FileComponent) CursorAdd(y int) {
+	f.muPosition.Lock()
+	oldy, newy := f.y, f.y+y
+	if oldy == 0 && newy > 0 {
+		f.buffer.Lock()
+	}
+	f.y = newy
+	f.muPosition.Unlock()
+}
+
+func (f *FileComponent) OffsetAdd(x int) {
+	f.muPosition.Lock()
+	f.x += x
+	f.muPosition.Unlock()
+}
+
+func (f *FileComponent) MoveAdd(x, y int) {
+	f.muPosition.Lock()
+	f.x, f.y = f.x+x, f.y+y
+	f.muPosition.Unlock()
+}
+
+func (f *FileComponent) updateCursorX(max int) (offset int) {
+	if f.x < 0 {
+		f.x = 0
+	} else if max = max - 1; f.x > max {
+		f.x = max
+	}
+
+	offset = f.x
+	return
+}
+
+func (f *FileComponent) updateBufferCursor(height int) (cursor int) {
+	if lines := f.buffer.Lines(); lines > 0 {
+		maxoffset := lines - int64(height)
+
+		if f.y < 0 {
+			f.buffer.MoveCursor(maxoffset, int64(f.y))
+			f.y = 0
+		} else if height = height - 1; f.y > height {
+			f.buffer.MoveCursor(maxoffset, int64(f.y-height))
+			f.y = height
+		}
+	}
+
+	return f.y
 }
 
 func (f *FileComponent) Redraw(x, y, width, height int) {
-	offset, cursor := f.pos.Offset(), f.pos.Cursor()
+	f.muPosition.Lock()
 
-	f.muWindow.Lock()
-	yoffset := cursor - f.window
-	if yoffset < 0 {
-		f.window += yoffset
-	} else if maxsize := yoffset - int64(height) + 1; maxsize > 0 {
-		f.window += maxsize
-	}
-	window := f.window
-	f.muWindow.Unlock()
+	f.updateBufferCursor(height)
 
 	input := f.input.Get()
-	match := f.ring.FindLine(height, f.window, func(line string) bool {
-		if len(input) > 0 {
-			return strings.Contains(line, string(input))
+	match := f.buffer.FilterLines(input, height)
+
+	var diff int
+	if f.y != 0 {
+		diff := height - match.size
+		if diff > 0 && f.y < diff {
+			f.y = diff
 		}
-
-		return true
-	})
-
-	if maxoffset := (int64(match.maxoffset) - int64(width)) + 2; maxoffset > 0 {
-		f.pos.SetMaxOffset(maxoffset)
 	}
+	cursor := f.y - diff
+	offset := f.updateCursorX(match.maxoffset)
 
-	if match.size < height {
-		f.pos.SetMaxCursor(int64(match.size))
-	} else {
-		f.pos.SetMaxCursor(f.ring.Size())
-	}
+	f.muPosition.Unlock()
 
 	start := match.size
-	pointer := cursor - window
-
 	for i, line := range match.lines {
 		if line == nil {
 			break
 		}
 
-		nline := y + start - i - 1
-		if i == int(pointer) {
-			f.printer.Print(x, nline, tcell.StyleDefault, ">")
-			// off := fmt.Sprintf(" -- yoffset: %d, wy: %d, pointer: %d", yoffset, f.window, pointer)
-			// f.printer.Print(line.Len()+1, nline, tcell.StyleDefault, off)
+		yline := start - i
+		posy := y + yline - 1
+		line.Print(f.printer, x+1, posy, width, int(offset))
+		if i == int(cursor) {
+			f.printer.Print(x, posy, tcell.StyleDefault, ">")
+			off := fmt.Sprintf(" -- cursor: %d, yline: %d, posy: %d",
+				cursor, yline, posy)
+			f.printer.Print(width-len(off), posy, tcell.StyleDefault, off)
+			// _ = off
 		}
 
-		line.Print(f.printer, x+1, nline, width, int(offset))
 	}
+
 }

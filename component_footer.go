@@ -9,23 +9,23 @@ import (
 type FooterComponent struct {
 	s       tcell.Screen
 	printer Printer
-	pos     *position
+	ring    *Buffer
 }
 
-func NewFooterComponent(s tcell.Screen, p Printer, pos *position) *FooterComponent {
+func NewFooterComponent(s tcell.Screen, p Printer, ring *Buffer) *FooterComponent {
 	return &FooterComponent{
 		s:       s,
 		printer: p,
-		pos:     pos,
+		ring:    ring,
 	}
 }
 
 func (i *FooterComponent) Redraw(x, y, width, height int) {
 	w, h := i.s.Size()
 
-	cursor, offset := i.pos.Cursor(), i.pos.Offset()
-	line := fmt.Sprintf("cursor: %d, offset: %d, maxCursor: %d, maxOffset: %d, height: %d, width: %d",
-		cursor, offset, i.pos.maxCursor, i.pos.maxOffset, h, w)
+	lines, size, offset := i.ring.Infos()
+	line := fmt.Sprintf("offset: %d, size: %d, lines: %d, height: %d, width: %d",
+		offset, size, lines, h, w)
 
 	i.printer.Print(x, y, tcell.StyleDefault, line)
 }

@@ -24,6 +24,12 @@ func (p *position) Reset() {
 	p.mu.Unlock()
 }
 
+func (p *position) AddWindow(i int64) {
+	p.mu.Lock()
+	p.window += i
+	p.mu.Unlock()
+}
+
 func (p *position) Window() (c int64) {
 	p.mu.RLock()
 	c = p.window
@@ -62,7 +68,7 @@ func (p *position) Offset() (c int64) {
 func (p *position) SetMaxCursor(max int64) {
 	p.mu.Lock()
 	p.maxCursor = max
-	if max < p.cursor {
+	if p.cursor > max {
 		p.cursor = max
 	}
 	p.mu.Unlock()
@@ -71,7 +77,7 @@ func (p *position) SetMaxCursor(max int64) {
 func (p *position) SetMaxOffset(max int64) {
 	p.mu.Lock()
 	p.maxOffset = max
-	if max < p.offset {
+	if p.offset > max {
 		p.offset = max
 	}
 
@@ -104,9 +110,7 @@ func (p *position) AddOffset(offset int64) {
 
 func (p *position) Add(cursor, offset int64) {
 	p.mu.Lock()
-	if cursor != 0 {
-		p.addCursor(cursor)
-	}
+	p.addCursor(cursor)
 	p.addOffset(offset)
 	p.mu.Unlock()
 }

@@ -14,17 +14,16 @@ type Screen struct {
 
 	muScreen sync.RWMutex
 
-	posi  *position
 	input *Input
 
-	ring *Ring
+	ring *Buffer
 
 	header *InputComponent
 	file   *FileComponent
 	footer *FooterComponent
 }
 
-func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
+func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 	encoding.Register()
 	s, err := tcell.NewScreen()
 	if err != nil {
@@ -34,8 +33,8 @@ func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
 	// create input
 	input := &Input{}
 
-	posi := &position{}
-	posi.SetMaxCursor(ring.lines)
+	// posi := &position{}
+	// posi.SetMaxCursor(ring.Lines())
 
 	var printer Printer
 	if lcfg.NoColor {
@@ -44,17 +43,15 @@ func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
 		printer = &ColorPrinter{s}
 	}
 
-	filec := NewFileComponent(printer, input, posi, ring)
+	filec := NewFileComponent(printer, input, ring)
 	inputc := NewInputComponent(printer, input, 1, 0)
-	footerc := NewFooterComponent(s, printer, posi)
+	footerc := NewFooterComponent(s, printer, ring)
 	return &Screen{
 		cupdate: make(chan struct{}, 1),
 		ts:      s,
 		ring:    ring,
 
-		input: input,
-		posi:  posi,
-
+		input:  input,
 		header: inputc,
 		file:   filec,
 		footer: footerc,
@@ -64,7 +61,6 @@ func NewScreen(lcfg *LoonConfig, ring *Ring) (*Screen, error) {
 func (s *Screen) Clear() {
 	s.muScreen.Lock()
 	s.ring.Clear()
-	s.posi.Reset()
 	s.Redraw()
 	s.muScreen.Unlock()
 
@@ -76,20 +72,8 @@ func (s *Screen) readfile() {
 		if err != nil {
 			return
 		}
-		s.muScreen.RLock()
-
-		_, h := s.ts.Size()
-		s.posi.SetMaxCursor(s.ring.Lines())
-		if s.posi.Cursor() > 0 {
-			s.posi.AddCursor(1)
-			if s.ring.Lines() > int64(h) {
-				s.file.IncWindow(1)
-			}
-		}
 
 		s.Redraw()
-
-		s.muScreen.RUnlock()
 	}
 }
 
@@ -133,7 +117,7 @@ func (s *Screen) Run() error {
 }
 
 func (s *Screen) handleEventMouse(ev *tcell.EventMouse) {
-	var cursor, offset int64
+	var cursor, offset int
 
 	button := ev.Buttons()
 	if button&tcell.WheelLeft != 0 {
@@ -149,14 +133,14 @@ func (s *Screen) handleEventMouse(ev *tcell.EventMouse) {
 	}
 
 	if cursor != 0 || offset != 0 {
-		s.posi.Add(cursor, offset)
+		s.file.MoveAdd(offset, cursor)
 	}
 
 	s.Redraw()
 }
 
 func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
-	var factor int64
+	var factor int
 	switch {
 	case ev.Modifiers()&tcell.ModCtrl != 0:
 		return s.handleCtrlCommand(ev)
@@ -168,22 +152,21 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 
 	switch ev.Key() {
 	case tcell.KeyUp:
-		s.posi.AddCursor(1 * factor)
+		s.file.CursorAdd(1 * factor)
 	case tcell.KeyRight:
-		s.posi.AddOffset(2 * factor)
+		s.file.OffsetAdd(2 * factor)
 	case tcell.KeyDown:
-		s.posi.AddCursor(-1 * factor)
+		s.file.CursorAdd(-1 * factor)
 	case tcell.KeyLeft:
-		s.posi.AddOffset(-2 * factor)
+		s.file.OffsetAdd(-2 * factor)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		s.input.DeleteBackward()
 	case tcell.KeyEnter:
-		s.posi.SetCursor(0)
+		s.file.ResetPosition()
 	default:
 		if r := ev.Rune(); r >= 41 && r <= 176 {
 			s.input.Add(r)
-			// reset cursor
-			s.posi.SetCursor(0)
+			s.file.ResetPosition()
 		} else {
 			return nil
 		}
@@ -196,9 +179,9 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 func (s *Screen) handleCtrlCommand(ev *tcell.EventKey) error {
 	switch ev.Key() {
 	case tcell.KeyCtrlE:
-		s.posi.SetOffset(s.posi.MaxOffset())
+		// s.posi.SetOffset(s.posi.MaxOffset())
 	case tcell.KeyCtrlA:
-		s.posi.SetOffset(0)
+		// s.posi.SetOffset(0)
 	case tcell.KeyCtrlL:
 		s.Clear()
 	default:
@@ -236,4 +219,5 @@ func (s *Screen) redraw() {
 	s.footer.Redraw(1, h-1, w, 1)
 
 	s.ts.Show()
+
 }
