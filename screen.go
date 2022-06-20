@@ -164,7 +164,7 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 	case tcell.KeyEnter:
 		s.file.ResetPosition()
 	default:
-		if r := ev.Rune(); r >= 41 && r <= 176 {
+		if r := ev.Rune(); (r >= 41 && r <= 176) || r == ' ' {
 			s.input.Add(r)
 			s.file.ResetPosition()
 		} else {

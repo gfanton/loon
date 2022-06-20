@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
@@ -112,10 +111,9 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 		line.Print(f.printer, x+1, posy, width, int(offset))
 		if i == int(cursor) {
 			f.printer.Print(x, posy, tcell.StyleDefault, ">")
-			off := fmt.Sprintf(" -- cursor: %d, yline: %d, posy: %d",
-				cursor, yline, posy)
-			f.printer.Print(width-len(off), posy, tcell.StyleDefault, off)
-			// _ = off
+			// off := fmt.Sprintf(" -- cursor: %d, yline: %d, posy: %d",
+			// 	cursor, yline, posy)
+			// f.printer.Print(width-len(off), posy, tcell.StyleDefault, off)
 		}
 
 	}

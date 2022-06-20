@@ -43,9 +43,9 @@ func ParseANSILine(line string, color bool) *ANSILine {
 func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 	content := l.content.Bytes()
 	for _, s := range l.seqs {
-		if s.Index > width {
-			break
-		}
+		// if s.Index > width {
+		// 	break
+		// }
 
 		to := s.Index + s.Size
 		if offset >= to {
