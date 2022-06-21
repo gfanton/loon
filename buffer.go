@@ -27,10 +27,8 @@ type Buffer struct {
 	size   int
 
 	// subring *ring.Ring
-	filter      Filter
-	input       string
-	filterCache *ring.Ring
-	filterSize  int
+	filter Filter
+	input  string
 
 	muRing sync.RWMutex
 
@@ -157,7 +155,6 @@ type Matchs struct {
 func (b *Buffer) FilterLines(input string, limit int) *Matchs {
 	lines := make([]Line, limit)
 
-	// var seek int64
 	var maxoffset, bn, fn int
 
 	b.muRing.Lock()
@@ -180,8 +177,6 @@ func (b *Buffer) FilterLines(input string, limit int) *Matchs {
 		}
 	}
 
-	// log.Printf("lines: %v", lines)
-
 	if bn < limit {
 		forwardLimit := limit - bn
 		forwardline := make([]Line, forwardLimit)
@@ -199,13 +194,9 @@ func (b *Buffer) FilterLines(input string, limit int) *Matchs {
 					maxoffset = pline.Len()
 				}
 			}
-
-			// log.Printf("%d: line: %s, limit: %d, cursor: %t", n, line, limit, p.Prev() == b.root)
-
 		}
 
 		lines = append(forwardline[forwardLimit-fn:], lines[:limit-fn]...)
-		// log.Printf("flines: %v", lines)
 	}
 
 	b.muRing.Unlock()

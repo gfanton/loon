@@ -49,19 +49,6 @@ func expandPath(path string) string {
 	return path
 }
 
-// func emitANSIStr(s tcell.Screen, x, y int, str string) (index int) {
-// 	st, err := ansi.Parse(str)
-// 	if err != nil {
-// 		st = []*ansi.StyledText{{Label: str}}
-// 	}
-
-// 	for _, t := range st {
-// 		style := styledcell(t)
-// 		x = emitStr(s, x, y, style, t.Label)
-// 	}
-// 	return x
-// }
-
 func styledcell(as *ansi.StyledText) (ts tcell.Style) {
 	ts = tcell.StyleDefault
 	if as == nil {

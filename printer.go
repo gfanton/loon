@@ -22,3 +22,23 @@ func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) {
 		x += w
 	}
 }
+
+// printer color, default
+
+type ColorPrinter struct {
+	s tcell.Screen
+}
+
+func (cp *ColorPrinter) Print(x, y int, style tcell.Style, str string) {
+	emitStr(cp.s, x, y, style, str)
+}
+
+// raw printer ignore color style
+
+type RawPrinter struct {
+	s tcell.Screen
+}
+
+func (cp *RawPrinter) Print(x, y int, style tcell.Style, str string) {
+	emitStr(cp.s, x, y, tcell.StyleDefault, str)
+}

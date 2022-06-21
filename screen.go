@@ -179,9 +179,9 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 func (s *Screen) handleCtrlCommand(ev *tcell.EventKey) error {
 	switch ev.Key() {
 	case tcell.KeyCtrlE:
-		// s.posi.SetOffset(s.posi.MaxOffset())
+		s.file.OffsetSet(s.file.MaxOffset())
 	case tcell.KeyCtrlA:
-		// s.posi.SetOffset(0)
+		s.file.OffsetSet(0)
 	case tcell.KeyCtrlL:
 		s.Clear()
 	default:

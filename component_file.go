@@ -11,9 +11,9 @@ type FileComponent struct {
 	buffer  *Buffer
 	printer Printer
 
-	muPosition   sync.Mutex
-	x, y         int
-	currentLines int64
+	muPosition sync.RWMutex
+	x, y       int
+	maxOffsetX int
 }
 
 func NewFileComponent(print Printer, in *Input, ring *Buffer) *FileComponent {
@@ -47,6 +47,22 @@ func (f *FileComponent) OffsetAdd(x int) {
 	f.muPosition.Unlock()
 }
 
+func (f *FileComponent) MaxOffset() (x int) {
+	f.muPosition.RLock()
+	x = f.maxOffsetX
+	f.muPosition.RUnlock()
+	return
+}
+
+func (f *FileComponent) OffsetSet(x int) {
+	f.muPosition.Lock()
+	if x > f.maxOffsetX {
+		x = f.maxOffsetX
+	}
+	f.x = x
+	f.muPosition.Unlock()
+}
+
 func (f *FileComponent) MoveAdd(x, y int) {
 	f.muPosition.Lock()
 	f.x, f.y = f.x+x, f.y+y
@@ -60,6 +76,7 @@ func (f *FileComponent) updateCursorX(max int) (offset int) {
 		f.x = max
 	}
 
+	f.maxOffsetX = max
 	offset = f.x
 	return
 }
@@ -111,6 +128,8 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 		line.Print(f.printer, x+1, posy, width, int(offset))
 		if i == int(cursor) {
 			f.printer.Print(x, posy, tcell.StyleDefault, ">")
+
+			// debug
 			// off := fmt.Sprintf(" -- cursor: %d, yline: %d, posy: %d",
 			// 	cursor, yline, posy)
 			// f.printer.Print(width-len(off), posy, tcell.StyleDefault, off)
