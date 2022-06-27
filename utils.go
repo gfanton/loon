@@ -49,6 +49,13 @@ func expandPath(path string) string {
 	return path
 }
 
+func fillUpLine(printer Printer, startx, y, width int) {
+	// fillup screen
+	if startx < width {
+		printer.Print(startx, y, tcell.StyleDefault, strings.Repeat(" ", width-startx))
+	}
+}
+
 func styledcell(as *ansi.StyledText) (ts tcell.Style) {
 	ts = tcell.StyleDefault
 	if as == nil {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -35,18 +36,29 @@ type testBufferCase struct {
 func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 	reader := &testReader{size: tc.ReaderSize}
 	buffer := newTestBuffer(t, reader, int(tc.BufferSize))
-	require.Equal(t, int64(0), buffer.Lines())
+
+	require.Equal(t, uint(0), buffer.Lines())
 	for i := int64(0); i < tc.ReaderSize; i++ {
 		_, err := buffer.Readline()
 		require.NoError(t, err)
 	}
-	require.Nil(t, buffer.cursor)
 
 	var input string
+	filter := func(v interface{}) bool {
+		if v == nil {
+			return false
+		}
+
+		node := v.(*Node)
+		line := node.Line.String()
+		return simpleFilter(input, line)
+	}
+
+	window := NewBufferWindow(buffer, filter, int(tc.Height))
+
 	for i, seq := range tc.Sequences {
 		name := fmt.Sprintf("seq_%d", i+1)
 		t.Run(name, func(t *testing.T) {
-			maxoffset := buffer.Lines() - int64(tc.Height)
 
 			switch v := seq.Sequence.(type) {
 			case tSeqAdd:
@@ -54,24 +66,43 @@ func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 				for i := int64(0); i < int64(v); i++ {
 					_, err := buffer.Readline()
 					require.NoError(t, err)
+
+					window.Move(-1)
 				}
 
 			case tSeqMove:
-				t.Logf("moving %d, maxoffset: %d", v, maxoffset)
-				buffer.MoveCursor(maxoffset, int64(v))
+				if i := int(v); i != 0 {
+					t.Logf("moving %d", i)
+					window.Move(i)
+				}
 			case tSeqInput:
 				t.Logf("update input: %s", v)
 				input = string(v)
+				window.Update()
 			}
 
-			matchs := buffer.FilterLines(input, int(tc.Height))
-			require.Len(t, matchs.lines, int(tc.Height))
-			require.Equal(t, len(seq.ExpectedLine), matchs.size, "should have the expected number of result")
+			matchs := []string{}
+			window.DoFork(func(index int, v interface{}) {
+				if v == nil {
+					matchs = append(matchs, "-")
+					return
+				}
+
+				node := v.(*Node)
+				line := node.Line.String()
+				matchs = append(matchs, line)
+			})
+
+			log.Printf("lines: %v\n", matchs)
+
+			// matchs := buffer.FilterLines(input, int(tc.Height))
+			// require.Len(t, matchs, int(tc.Height))
+			// require.Equal(t, len(seq.ExpectedLine), len(matchs), "should have the expected number of result")
 
 			for i, e := range seq.ExpectedLine {
 				expected := strconv.Itoa(e)
-				line := matchs.lines[i]
-				require.Equal(t, expected, line.String())
+				line := matchs[i]
+				require.Equal(t, expected, line)
 			}
 		})
 	}
@@ -82,36 +113,37 @@ func TestBufferMove(t *testing.T) {
 		{"simple move",
 			100, 100, 10,
 			[]testBufferSequence{
-				{tSeqMove(tMoveUp), tRange(99, 89)},
-				{tSeqMove(tMoveDown), tRange(100, 90)},
-				{tSeqMove(tMoveUp * 5), tRange(95, 85)},
-				{tSeqMove(tMoveDown * 5), tRange(100, 90)},
+				{tSeqMove(tMoveNone), tRange(90, 100)},
+				{tSeqMove(tMoveUp), tRange(89, 99)},
+				{tSeqMove(tMoveDown), tRange(90, 100)},
+				{tSeqMove(tMoveUp * 5), tRange(85, 95)},
+				{tSeqMove(tMoveDown * 5), tRange(90, 100)},
 			},
 		},
 
 		{"complex move",
 			100, 100, 10,
 			[]testBufferSequence{
-				{tSeqMove(tMoveUp * 110), tRange(10, 0)},
-				{tSeqMove(tMoveUp * 100), tRange(10, 0)},
-				{tSeqMove(tMoveDown * 10), tRange(20, 10)},
-				{tSeqMove(tMoveDown * 1000), tRange(100, 90)},
-				{tSeqMove(tMoveUp * 1000), tRange(10, 0)},
-				{tSeqMove(tMoveDown * 40), tRange(50, 40)},
-				{tSeqMove(tMoveDown * 50), tRange(100, 90)},
-				{tSeqMove(tMoveDown * 50), tRange(100, 90)},
+				{tSeqMove(tMoveUp * 110), tRange(0, 10)},
+				{tSeqMove(tMoveUp * 100), tRange(0, 10)},
+				{tSeqMove(tMoveDown * 10), tRange(10, 20)},
+				{tSeqMove(tMoveDown * 1000), tRange(90, 100)},
+				{tSeqMove(tMoveUp * 1000), tRange(0, 10)},
+				{tSeqMove(tMoveDown * 40), tRange(40, 50)},
+				{tSeqMove(tMoveDown * 50), tRange(90, 100)},
+				{tSeqMove(tMoveDown * 50), tRange(90, 100)},
 			},
 		},
 
 		{"move with input",
 			100, 100, 5,
 			[]testBufferSequence{
-				{tSeqNone, tRange(100, 95)},
+				{tSeqNone, tRange(95, 100)},
 				{tSeqInput("11"), []int{11}},
-				{tSeqInput("1"), []int{100, 91, 81, 71, 61}},
-				{tSeqMove(tMoveUp), []int{91, 81, 71, 61, 51}},
-				{tSeqMove(tMoveUp * 8), []int{19, 18, 17, 16, 15}},
-				{tSeqMove(tMoveUp * 100), []int{13, 12, 11, 10, 1}},
+				{tSeqInput("1"), []int{1, 10, 11, 12, 13}},
+				{tSeqMove(tMoveUp), []int{1, 10, 11, 12, 13}},
+				{tSeqMove(tMoveDown * 5), []int{14, 15, 16, 17, 18}},
+				{tSeqMove(tMoveDown * 100), []int{61, 71, 81, 91, 100}},
 				{tSeqInput("foo"), []int{}},
 			},
 		},
@@ -120,10 +152,39 @@ func TestBufferMove(t *testing.T) {
 			0, 100, 10,
 			[]testBufferSequence{
 				{tSeqNone, []int{}},
-				{tSeqAdd(50), tRange(50, 40)},
-				{tSeqMove(tMoveUp * 10), tRange(40, 30)},
-				{tSeqAdd(50), tRange(40, 30)},
-				{tSeqAdd(1000), tRange(1050, 1040)},
+				{tSeqAdd(50), tRange(40, 50)},
+				{tSeqMove(tMoveUp * 10), tRange(30, 40)},
+				{tSeqAdd(50), tRange(80, 90)},
+				{tSeqAdd(1000), tRange(1080, 1090)},
+
+				// {tSeqMove(tMoveUp), tRange(99, 89)},
+				// {tSeqMove(tMoveDown), tRange(100, 90)},
+				// {tSeqMove(tMoveUp * 5), tRange(95, 85)},
+				// {tSeqMove(tMoveDown * 5), tRange(100, 90)},
+			},
+		},
+
+		{"move with dynamic reader and input",
+			100, 1000, 5,
+			[]testBufferSequence{
+				{tSeqInput("1"), []int{61, 71, 81, 91, 100}},
+				{tSeqMove(tMoveUp * 110), []int{1, 10, 11, 12, 13}},
+				{tSeqAdd(1), []int{10, 11, 12, 13, 14}},
+				{tSeqAdd(50), []int{132, 133, 134, 135, 136}},
+				{tSeqMove(tMoveUp * 1), []int{131, 132, 133, 134, 135}},
+				{tSeqMove(tMoveDown * 10), []int{141, 142, 143, 144, 145}},
+				{tSeqInput("10"), []int{106, 107, 108, 109, 110}},
+				{tSeqInput("12"), []int{12, 112, 120, 121, 122}},
+				{tSeqInput(""), []int{118, 119, 120, 121, 122}},
+				{tSeqInput("15"), []int{15, 115, 150, 151}},
+				{tSeqInput("17"), []int{17, 117}},
+				// {tSeqInput("2"), []int{17, 117}},
+
+				//  51, 41, 31, 21, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 1
+				// {tSeqAdd(1001), tRange(50, 40)},
+				// {tSeqMove(tMoveUp * 10), tRange(40, 30)},
+				// {tSeqAdd(50), tRange(40, 30)},
+				// {tSeqAdd(1000), tRange(1050, 1040)},
 
 				// {tSeqMove(tMoveUp), tRange(99, 89)},
 				// {tSeqMove(tMoveDown), tRange(100, 90)},
@@ -150,6 +211,7 @@ func tRange(start, end int) (r []int) {
 		size = -size
 	} else {
 		inc = 1
+		start++
 	}
 	r = make([]int, size)
 
@@ -162,7 +224,7 @@ func tRange(start, end int) (r []int) {
 
 func TestBufferReadline(t *testing.T) {
 	cases := []struct {
-		readerSize int64
+		readerSize uint
 		bufferSize int
 	}{
 		{100, 1000},
@@ -175,10 +237,10 @@ func TestBufferReadline(t *testing.T) {
 	for _, tc := range cases {
 		name := fmt.Sprintf("reader_%d_buffer_%d", tc.readerSize, tc.bufferSize)
 		t.Run(name, func(t *testing.T) {
-			reader := &testReader{size: tc.readerSize}
+			reader := &testReader{size: int64(tc.readerSize)}
 			buffer := newTestBuffer(t, reader, tc.bufferSize)
-			require.Equal(t, int64(0), buffer.Lines())
-			for i := int64(0); i < tc.readerSize; i++ {
+			require.Equal(t, uint(0), buffer.Lines())
+			for i := uint(0); i < tc.readerSize; i++ {
 				line, err := buffer.Readline()
 				require.NoError(t, err)
 				require.True(t, reader.validateCurrenntLine(line))

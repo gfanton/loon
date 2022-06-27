@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"container/ring"
 	"fmt"
 	"io"
 	"os"
@@ -43,7 +42,7 @@ func (f *File) NewRing(lcfg *LoonConfig) (*Buffer, error) {
 	}
 
 	var fsize, cursor, lines int64
-	ring := ring.New(size + 1)
+	loop := NewLoop(size)
 
 	fi, err := os.Stat(f.Path)
 	if err == nil {
@@ -59,24 +58,23 @@ func (f *File) NewRing(lcfg *LoonConfig) (*Buffer, error) {
 		return nil, fmt.Errorf("unable to tail file: %w", err)
 	}
 
+	reader := &FileReader{
+		lines: lines,
+		tail:  tail,
+	}
+
+	buffer := NewBufferFromRing(loop, parser, reader)
+
 	// fill ring until the end of the file
 	for line := range tail.Lines {
-		ring.Value = line.Text
-		ring = ring.Next()
-		lines++
-
+		buffer.addline(line.Text)
 		if line.SeekInfo.Offset >= fsize {
 			break
 		}
 
 	}
 
-	reader := &FileReader{
-		lines: lines,
-		tail:  tail,
-	}
-
-	return NewBufferFromRing(ring, parser, reader), nil
+	return buffer, nil
 }
 
 func (f *File) tailFile(cursor int64) (*tail.Tail, error) {

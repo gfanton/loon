@@ -16,7 +16,8 @@ type Screen struct {
 
 	input *Input
 
-	ring *Buffer
+	ring   *Buffer
+	window *BufferWindow
 
 	header *InputComponent
 	file   *FileComponent
@@ -30,8 +31,20 @@ func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 		return nil, fmt.Errorf("unable to create new screen: %w", err)
 	}
 
+	_, h := s.Size()
+
 	// create input
 	input := &Input{}
+
+	filter := func(v interface{}) bool {
+		node := v.(*Node)
+		input := input.Get()
+		line := node.Line.String()
+		return simpleFilter(input, line)
+
+	}
+
+	window := NewBufferWindow(ring, filter, h)
 
 	// posi := &position{}
 	// posi.SetMaxCursor(ring.Lines())
@@ -49,7 +62,9 @@ func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 	return &Screen{
 		cupdate: make(chan struct{}, 1),
 		ts:      s,
-		ring:    ring,
+
+		ring:   ring,
+		window: window,
 
 		input:  input,
 		header: inputc,
@@ -60,7 +75,7 @@ func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 
 func (s *Screen) Clear() {
 	s.muScreen.Lock()
-	s.ring.Clear()
+	// s.ring.Clear()
 	s.Redraw()
 	s.muScreen.Unlock()
 
@@ -73,6 +88,7 @@ func (s *Screen) readfile() {
 			return
 		}
 
+		s.file.Follow(1)
 		s.Redraw()
 	}
 }
@@ -207,7 +223,7 @@ func (s *Screen) redrawLoop() {
 func (s *Screen) redraw() {
 	w, h := s.ts.Size()
 
-	s.ts.Clear()
+	// s.ts.Clear()
 
 	// header start at x:1,y:0
 	s.header.Redraw(1, 0, w, 1)

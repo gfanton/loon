@@ -4,6 +4,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/ioutil"
+	"log"
 	"os"
 
 	"github.com/oklog/run"
@@ -34,7 +36,7 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 	rootFlagSet.BoolVar(&cfg.Json, "json", false, "parsed is a json line file")
 	rootFlagSet.BoolVar(&cfg.NoColor, "nocolor", false, "disable color")
 	rootFlagSet.BoolVar(&cfg.NoAnsi, "noansi", false, "do not parse ansi sequence")
-	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring size")
+	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring line size")
 
 	err := ff.Parse(rootFlagSet, args,
 		ff.WithEnvVarPrefix("LOON"),
@@ -52,6 +54,9 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 }
 
 func main() {
+	// disable logger
+	log.SetOutput(ioutil.Discard)
+
 	args := os.Args[1:]
 
 	lcfg, err := parseRootConfig(args)
@@ -60,7 +65,7 @@ func main() {
 	}
 
 	root := &ffcli.Command{
-		Name:    "project [flags] <subcommand>",
+		Name:    "loon [flags] <file>",
 		FlagSet: rootFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
 			var stdin bool
@@ -73,7 +78,7 @@ func main() {
 			} else if len(args) == 1 {
 				path = args[0]
 			} else {
-				return fmt.Errorf("invalid arguments")
+				return flag.ErrHelp
 			}
 
 			file := File{
@@ -112,8 +117,8 @@ func main() {
 	switch err := process.Run(); err {
 	case flag.ErrHelp, nil: // ok
 	case context.Canceled, context.DeadlineExceeded:
-		fmt.Fprintf(os.Stderr, "interrupted: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "interrupted: %s\n", err.Error())
 	default:
-		fmt.Fprintf(os.Stderr, "process error: %s", err.Error())
+		fmt.Fprintf(os.Stderr, "process error: %s\n", err.Error())
 	}
 }

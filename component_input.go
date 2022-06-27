@@ -1,10 +1,22 @@
 package main
 
 import (
+	"strings"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
 )
+
+var simpleFilter = func(input string, value string) bool {
+	inputs := strings.Split(input, " ")
+	for _, in := range inputs {
+		if strings.Contains(value, in) {
+			return true
+		}
+	}
+
+	return false
+}
 
 type InputComponent struct {
 	input *Input
@@ -28,7 +40,8 @@ func (i *InputComponent) Redraw(x, y, width, height int) {
 		offset = size - width
 	}
 
-	i.printer.Print(x, y, tcell.StyleDefault, input[offset:])
+	xoffset := i.printer.Print(x, y, tcell.StyleDefault, input[offset:])
+	fillUpLine(i.printer, xoffset, y, width)
 }
 
 type Input struct {

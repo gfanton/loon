@@ -41,6 +41,7 @@ func ParseANSILine(line string, color bool) *ANSILine {
 }
 
 func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
+
 	content := l.content.Bytes()
 	for _, s := range l.seqs {
 		// if s.Index > width {
@@ -61,6 +62,8 @@ func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 		p.Print(x, y, s.Style, string(str))
 		x += len(str)
 	}
+
+	fillUpLine(p, x, y, width)
 }
 
 func (l *ANSILine) String() string {
