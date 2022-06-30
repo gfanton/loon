@@ -11,6 +11,8 @@ func TestRingResize(t *testing.T) {
 	cases := []struct {
 		Start, Resize int
 	}{
+		{0, 10},
+		{10, 10},
 		{10, 20},
 		{20, 10},
 		{10, 10},

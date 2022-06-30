@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 
@@ -55,7 +54,7 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 
 func main() {
 	// disable logger
-	log.SetOutput(ioutil.Discard)
+	log.SetOutput(os.Stderr)
 
 	args := os.Args[1:]
 

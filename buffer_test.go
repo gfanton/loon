@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,8 +20,13 @@ const (
 type tSeqMove int
 type tSeqInput string
 type tSeqAdd int64
+type tSeqResize int64
 
 var tSeqNone = tSeqMove(tMoveNone)
+
+var noopFilter = func(v interface{}) bool {
+	return true
+}
 
 type testBufferSequence struct {
 	Sequence     interface{}
@@ -74,6 +80,11 @@ func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 				if i := int(v); i != 0 {
 					t.Logf("moving %d", i)
 					window.Move(i)
+				}
+			case tSeqResize:
+				if i := int(v); i != 0 {
+					t.Logf("resize %d", i)
+					window.Resize(i)
 				}
 			case tSeqInput:
 				t.Logf("update input: %s", v)
@@ -132,6 +143,14 @@ func TestBufferMove(t *testing.T) {
 				{tSeqMove(tMoveDown * 40), tRange(40, 50)},
 				{tSeqMove(tMoveDown * 50), tRange(90, 100)},
 				{tSeqMove(tMoveDown * 50), tRange(90, 100)},
+			},
+		},
+
+		{"resize",
+			100, 100, 0,
+			[]testBufferSequence{
+				{tSeqNone, []int{}},
+				{tSeqResize(10), tRange(0, 10)},
 			},
 		},
 
@@ -239,16 +258,55 @@ func TestBufferReadline(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			reader := &testReader{size: int64(tc.readerSize)}
 			buffer := newTestBuffer(t, reader, tc.bufferSize)
-			require.Equal(t, uint(0), buffer.Lines())
+
 			for i := uint(0); i < tc.readerSize; i++ {
 				line, err := buffer.Readline()
 				require.NoError(t, err)
-				require.True(t, reader.validateCurrenntLine(line))
+				require.True(t, reader.validateCurrentLine(line))
 			}
+
 			require.Equal(t, tc.readerSize, buffer.Lines())
 		})
 	}
 
+}
+
+func TestBufferWindowSize(t *testing.T) {
+	const (
+		readerSize = 100
+		bufferSize = 1000
+		windowSize = 10
+	)
+
+	reader := &testReader{size: int64(readerSize)}
+	buffer := newTestBuffer(t, reader, bufferSize)
+
+	assert.Equal(t, uint(0), buffer.Lines())
+
+	halfsize := windowSize / 2
+	cursor := uint(0)
+	for ; cursor < uint(halfsize); cursor++ {
+		line, err := buffer.Readline()
+		require.NoError(t, err)
+		require.True(t, reader.validateCurrentLine(line))
+	}
+	require.Equal(t, uint(5), buffer.Lines())
+
+	window := NewBufferWindow(buffer, noopFilter, windowSize)
+	l, s := window.Size()
+	assert.Equal(t, 10, s)
+	assert.Equal(t, 5, l)
+
+	for ; cursor < readerSize; cursor++ {
+		line, err := buffer.Readline()
+		require.NoError(t, err)
+		require.True(t, reader.validateCurrentLine(line))
+	}
+	require.Equal(t, uint(readerSize), buffer.Lines())
+
+	l, s = window.Size()
+	require.Equal(t, 10, s)
+	require.Equal(t, 5, l) // FIXME: not true
 }
 
 func newTestBuffer(t *testing.T, reader Reader, size int) *Buffer {
@@ -290,7 +348,7 @@ func (r *testReader) ResetLines() {
 	r.index = 0
 }
 
-func (r *testReader) validateCurrenntLine(line string) bool {
+func (r *testReader) validateCurrentLine(line string) bool {
 	index := r.Lines()
 	return fmt.Sprintf("%d", index) == line
 }

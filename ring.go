@@ -2,7 +2,7 @@ package main
 
 import (
 	"container/ring"
-	"fmt"
+	"log"
 	"sync"
 )
 
@@ -12,17 +12,6 @@ type Loop struct {
 	muRing *sync.RWMutex
 	size   int
 	root   *ring.Ring
-}
-
-type ForkedLoop Loop
-
-func NewForkedLoop(l *Loop, size int) *ForkedLoop {
-	fork := NewLoop(size)
-	l.Do(func(n *ring.Ring) {
-		fork.PushFrontValue(n)
-	}, size)
-	return (*ForkedLoop)(fork)
-
 }
 
 func NewLoop(size int) *Loop {
@@ -68,7 +57,6 @@ func (r *Loop) DoPrevUntil(start *ring.Ring, fn func(n *ring.Ring) bool) (p *rin
 	defer r.muRing.Unlock()
 
 	if p = start; p != nil {
-		fmt.Println("start:", p.Value)
 		for p = start.Prev(); p != r.root; p = p.Prev() {
 			if !fn(p) {
 				return
@@ -127,6 +115,7 @@ func (r *Loop) DoBackward(fn func(n *ring.Ring), limit int) {
 
 func (r *Loop) Resize(n int) {
 	r.muRing.Lock()
+
 	switch {
 	case n < r.size:
 		skip := r.root
@@ -137,6 +126,11 @@ func (r *Loop) Resize(n int) {
 		r.root.Link(skip)
 
 	case n > r.size:
+		if r.root == nil {
+			r.root = &ring.Ring{Value: nil}
+			r.size++
+		}
+
 		for ; r.size < n; r.size++ {
 			r.root.Link(&ring.Ring{Value: nil})
 		}
@@ -156,12 +150,12 @@ func NewBufferWindow(buffer *Buffer, filter LoopFilter, size int) *BufferWindow 
 	fork := NewLoop(size)
 	i := 0
 	buffer.Loop().DoPrevUntil(buffer.Root(), func(n *ring.Ring) bool {
-		fmt.Println("nvalue", n.Value)
 		if i >= size || n.Value == nil {
 			return false
 		}
 
 		i++
+		log.Printf("n: %v\n", n.Value)
 		fork.PushFrontValue(n)
 		return true
 	})
@@ -173,30 +167,61 @@ func NewBufferWindow(buffer *Buffer, filter LoopFilter, size int) *BufferWindow 
 	}
 }
 
-func (w *BufferWindow) Size() (i int) {
-	w.muRing.RLock()
-	root := w.fork.Root()
-	for c := root.Prev(); c.Value != nil && c != root; c = c.Prev() {
-		i++
+func (w *BufferWindow) IsTop() (ok bool) {
+	if root := w.fork.Root(); root != nil {
+		ok = root.Value == w.buffer.Root().Prev()
 	}
+	return
+}
+
+func (w *BufferWindow) Readline() (ok bool) {
+	if root := w.fork.Root(); root != nil {
+		ok = root.Value == w.buffer.Root().Prev()
+	}
+	return
+}
+
+func (w *BufferWindow) Size() (length, size int) {
+	root := w.fork.Root()
+	if root == nil {
+		return
+	}
+
+	w.muRing.RLock()
+	size = 1
+	if root.Value != nil {
+		length++
+	}
+
+	for c := root.Prev(); c != root; c = c.Prev() {
+		log.Printf("%v\n", c.Value)
+		if c.Value != nil {
+			length++
+		}
+		size++
+	}
+
 	w.muRing.RUnlock()
 	return
 }
 
-func (w *BufferWindow) DoFork(fn func(index int, v interface{})) {
-	w.muRing.Lock()
+func (w *BufferWindow) Resize(n int) {
+	w.fork.Resize(n)
+	w.Update()
+}
 
+func (w *BufferWindow) DoFork(fn func(index int, v interface{})) {
 	var i int
-	w.fork.Do(func(r *ring.Ring) {
+	root := w.fork.Root()
+	w.fork.DoPrevUntil(root, func(r *ring.Ring) bool {
 		var node interface{}
 		if r.Value != nil {
 			node = r.Value.(*ring.Ring).Value
 		}
 		fn(i, node)
 		i++
-	}, w.fork.size)
-
-	w.muRing.Unlock()
+		return true
+	})
 }
 
 func (w *BufferWindow) Update() {
@@ -221,7 +246,6 @@ func (w *BufferWindow) Update() {
 	w.fork.DoNextUntil(froot, func(n *ring.Ring) bool {
 		for ; cp != broot; cp = cp.Prev() {
 			if w.filter(cp.Value) {
-				fmt.Println("do prev nvalue", cp.Value, broot.Value)
 				end, n.Value = n, cp
 				cp = cp.Prev()
 				return true
@@ -240,7 +264,6 @@ func (w *BufferWindow) Update() {
 		if n != end {
 			for ; cn != broot; cn = cn.Next() {
 				if w.filter(cn.Value) {
-					fmt.Println("do next value", cn.Value, broot.Value)
 					froot, n.Value = n, cn
 					cn = cn.Next()
 					return true
@@ -259,12 +282,22 @@ func (w *BufferWindow) Update() {
 	w.muRing.Unlock()
 }
 
+// Reset move the window at the root buffer level
+func (w *BufferWindow) Reset() {
+	if w.fork.root == nil {
+		w.fork.root = &ring.Ring{}
+	}
+
+	w.fork.root.Value = w.buffer.Root().Prev()
+	w.Update()
+}
+
 func (w *BufferWindow) Move(n int) {
 	froot := w.fork.Root()
 	broot := w.buffer.Root()
 	loop := w.buffer.Loop()
 	if froot == nil || broot == nil {
-		fmt.Println(froot == nil)
+		// fmt.Println(froot == nil)
 		return
 	}
 

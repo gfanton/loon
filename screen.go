@@ -37,6 +37,10 @@ func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 	input := &Input{}
 
 	filter := func(v interface{}) bool {
+		if v == nil {
+			return false
+		}
+
 		node := v.(*Node)
 		input := input.Get()
 		line := node.Line.String()
@@ -56,7 +60,7 @@ func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
 		printer = &ColorPrinter{s}
 	}
 
-	filec := NewFileComponent(printer, input, ring)
+	filec := NewFileComponent(printer, input, window)
 	inputc := NewInputComponent(printer, input, 1, 0)
 	footerc := NewFooterComponent(s, printer, ring)
 	return &Screen{
@@ -88,7 +92,6 @@ func (s *Screen) readfile() {
 			return
 		}
 
-		s.file.Follow(1)
 		s.Redraw()
 	}
 }
@@ -110,12 +113,19 @@ func (s *Screen) Run() error {
 	go s.redrawLoop()
 	go s.readfile()
 
+	var size int
 	for {
 		switch ev := s.ts.PollEvent().(type) {
 		case *tcell.EventError:
 			return fmt.Errorf("interrupted: %w", ev)
 		case *tcell.EventResize:
+			_, h := ev.Size()
 			s.ts.Sync()
+			if size == 0 && h > 0 {
+				s.file.ResetPosition()
+				size = h
+			}
+
 			s.Redraw()
 		case *tcell.EventKey:
 			if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
@@ -129,7 +139,6 @@ func (s *Screen) Run() error {
 		}
 
 	}
-
 }
 
 func (s *Screen) handleEventMouse(ev *tcell.EventMouse) {
@@ -168,21 +177,23 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 
 	switch ev.Key() {
 	case tcell.KeyUp:
-		s.file.CursorAdd(1 * factor)
+		s.file.CursorAdd(-1 * factor)
 	case tcell.KeyRight:
 		s.file.OffsetAdd(2 * factor)
 	case tcell.KeyDown:
-		s.file.CursorAdd(-1 * factor)
+		s.file.CursorAdd(1 * factor)
 	case tcell.KeyLeft:
 		s.file.OffsetAdd(-2 * factor)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		s.input.DeleteBackward()
+		s.window.Update()
 	case tcell.KeyEnter:
 		s.file.ResetPosition()
 	default:
 		if r := ev.Rune(); (r >= 41 && r <= 176) || r == ' ' {
 			s.input.Add(r)
-			s.file.ResetPosition()
+			s.window.Update()
+			// s.file.ResetPosition()
 		} else {
 			return nil
 		}
