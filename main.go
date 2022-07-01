@@ -80,17 +80,12 @@ func main() {
 				return flag.ErrHelp
 			}
 
-			file := File{
-				Stdin: stdin,
-				Path:  path,
-			}
-
-			ring, err := file.NewRing(lcfg)
+			reader, err := NewReader(lcfg, path, stdin)
 			if err != nil {
 				return fmt.Errorf("unable to init ring: %w", err)
 			}
 
-			s, err := NewScreen(lcfg, ring)
+			s, err := NewScreen(lcfg, reader)
 			if err != nil {
 				return err
 			}

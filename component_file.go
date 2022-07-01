@@ -1,60 +1,54 @@
 package main
 
 import (
-	"fmt"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
 )
 
 type FileComponent struct {
-	input  *Input
-	buffer *Buffer
-
-	w *BufferWindow
+	input *Input
+	bw    *BufferWindow[Line]
 
 	printer Printer
 
-	muPosition  sync.RWMutex
-	lock        bool
-	x, y, psize int
-	maxOffsetX  int
+	muPosition              sync.RWMutex
+	lock                    bool
+	cursorX, cursorY, psize int
+	maxOffsetX              int
 }
 
-func NewFileComponent(print Printer, in *Input, w *BufferWindow) *FileComponent {
+func NewFileComponent(print Printer, in *Input, bw *BufferWindow[Line]) *FileComponent {
 	return &FileComponent{
 		printer: print,
-		input:   in,
-		w:       w,
+		bw:      bw,
 		lock:    true,
 	}
 }
 
 func (f *FileComponent) ResetPosition() {
 	f.muPosition.Lock()
-	length, _ := f.w.Size()
-	f.w.Reset()
-	f.x, f.y = 0, length
+	f.cursorX, f.cursorY = 0, 0
 	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) Follow(n int) {
 	f.muPosition.Lock()
 	if f.lock {
-		f.y += n
+		f.cursorY -= n
 	}
 	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) CursorAdd(y int) {
 	f.muPosition.Lock()
-	f.y += y
+	f.cursorY += y
 	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) OffsetAdd(x int) {
 	f.muPosition.Lock()
-	f.x += x
+	f.cursorX += x
 	f.muPosition.Unlock()
 }
 
@@ -70,88 +64,101 @@ func (f *FileComponent) OffsetSet(x int) {
 	if x > f.maxOffsetX {
 		x = f.maxOffsetX
 	}
-	f.x = x
+	f.cursorX = x
 	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) MoveAdd(x, y int) {
 	f.muPosition.Lock()
-	f.x, f.y = f.x+x, f.y+y
+	f.cursorX, f.cursorY = f.cursorX+x, f.cursorY+y
 	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) updateCursorX(max int) (offset int) {
-	if f.x < 0 {
-		f.x = 0
-	} else if max = max - 1; f.x > max {
-		f.x = max
+	if f.cursorX < 0 {
+		f.cursorX = 0
+	} else if max = max - 1; f.cursorX > max {
+		f.cursorX = max
 	}
 
 	f.maxOffsetX = max
-	offset = f.x
-	return
+	return f.cursorX
 }
 
-func (f *FileComponent) moveBufferCursor(height int) (cursor int) {
-	if f.y <= 0 {
-		f.w.Move(-f.y)
-		f.y = 0
-	} else if f.y >= height {
-		f.w.Move(height - f.y)
-		f.y = height
-	}
+func (f *FileComponent) moveBufferCursor() (cursor int) {
+	f.bw.Move(-f.cursorY)
+	f.cursorY = 0
+	// switch {
+	// case f.cursorY < 0:
+	// 	f.bw.Move(-f.cursorY)
+	// 	f.cursorY = 0
+	// 	f.bw.Lock(false)
+	// case f.cursorY > 0:
+	// 	cursor := f.cursorY - max
+	// 	f.bw.Move(-cursor)
+	// 	f.cursorY = max
+	// 	f.bw.Lock(true)
+	// default:
+	// 	f.bw.Lock(true)
 
-	switch {
-	case !f.lock && f.y == height:
-		f.lock = true
-	case f.lock && f.y < height:
-		f.lock = false
-	}
+	// }
 
-	return f.y
+	return f.cursorY
 }
+
+// func (f *FileComponent) updateCursor(width, height int) (offx, offy int) {
+// 	offy = f.moveBufferCursor(height)
+// 	offx = f.updateCursorX(width)
+// 	return
+// }
 
 func (f *FileComponent) Redraw(x, y, width, height int) {
+	if height == 0 || width == 0 {
+		return
+	}
+
 	f.muPosition.Lock()
 
-	maxsize := height - 1
-	winsize, winlen := f.w.Size()
-	if winlen != maxsize {
-		f.w.Resize(maxsize)
+	f.bw.Resize(height)
+
+	// offy := f.moveBufferCursor(height - 1)
+	offy := f.moveBufferCursor()
+
+	lines := f.bw.Slice()
+
+	if maxc := len(lines) - 1; offy > maxc {
+		offy, f.cursorY = maxc, maxc
 	}
 
-	if winsize < maxsize {
-		maxsize = winsize - 1
+	var maxc int
+	for _, line := range lines {
+		if ll := line.Len(); ll > maxc {
+			maxc = ll
+		}
 	}
 
-	cursor := f.moveBufferCursor(maxsize)
-	offset := f.updateCursorX(100)
+	offx := f.updateCursorX(maxc - width)
 
-	f.w.DoFork(func(index int, v interface{}) {
-		var node *Node
-		if v != nil {
-			node = v.(*Node)
-		}
+	var i int
+	for ; i < len(lines); i++ {
+		indexy := i + y
+		// rIndexy := height - indexy
+		line := lines[i]
+		line.Print(f.printer, x, indexy, width, int(offx))
 
-		indexy := index + y
-		icursor := height - indexy
-		if node == nil {
-			fillUpLine(f.printer, x, indexy, width)
-		} else {
-			node.Line.Print(f.printer, x+1, indexy, width, int(offset))
+		// border := ' '
+		// if offy == rIndexy {
+		// 	border = '>'
+		// }
+		// f.printer.Print(x, indexy, tcell.StyleDefault, string(border))
+	}
 
-		}
-
-		var border rune
-		if index == cursor {
-			border = '>'
-			off := fmt.Sprintf(" -- size: %d, lock: %t, i: %d, cursor: %d, yline: %d", winlen, f.lock, icursor, cursor, index)
-			f.printer.Print(width-len(off), indexy, tcell.StyleDefault, off)
-		} else {
-			border = ' '
-		}
-		f.printer.Print(x, indexy, tcell.StyleDefault, string(border))
-	})
+	// fillup empty lines
+	for ; i < height; i++ {
+		indexy := i + y
+		f.printer.Print(x, indexy, tcell.StyleDefault, "~")
+		fillUpLine(f.printer, x+1, indexy, width)
+	}
 
 	f.muPosition.Unlock()
 }

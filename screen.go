@@ -8,72 +8,85 @@ import (
 	"github.com/gdamore/tcell/v2/encoding"
 )
 
+type Line interface {
+	Print(p Printer, x, y, width, offset int)
+	String() string
+	Len() int
+}
+
 type Screen struct {
+	muScreen sync.RWMutex
+
 	ts      tcell.Screen
 	cupdate chan struct{}
 
-	muScreen sync.RWMutex
-
-	input *Input
-
-	ring   *Buffer
-	window *BufferWindow
-
-	header *InputComponent
-	file   *FileComponent
-	footer *FooterComponent
+	bufferw *BufferWindow[Line]
+	input   *Input
+	header  *InputComponent
+	file    *FileComponent
+	footer  *FooterComponent
 }
 
-func NewScreen(lcfg *LoonConfig, ring *Buffer) (*Screen, error) {
+func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 	encoding.Register()
 	s, err := tcell.NewScreen()
 	if err != nil {
 		return nil, fmt.Errorf("unable to create new screen: %w", err)
 	}
 
-	_, h := s.Size()
+	// create parser
+	var parser Parser[Line]
+	{
+		if lcfg.NoAnsi {
+			parser = &RawParser{}
+		} else {
+			parser = &ANSIParser{NoColor: lcfg.NoColor}
+		}
+	}
 
 	// create input
 	input := &Input{}
 
-	filter := func(v interface{}) bool {
-		if v == nil {
-			return false
-		}
-
-		node := v.(*Node)
-		input := input.Get()
-		line := node.Line.String()
-		return simpleFilter(input, line)
-
+	// create filter
+	filter := func(l Line) bool {
+		yes := simpleFilter(input.Get(), l.String())
+		return yes
 	}
 
-	window := NewBufferWindow(ring, filter, h)
+	// create buffer
+	buffer := NewBuffer[Line](lcfg.RingSize)
 
-	// posi := &position{}
-	// posi.SetMaxCursor(ring.Lines())
+	// create buffer window
+	_, h := s.Size()
+	bw := NewBufferWindow(h, &BufferWindowOptions[Line]{
+		Reader: reader,
+		Filter: filter,
+		Parser: parser,
+		Buffer: buffer,
+	})
 
+	// create printer
 	var printer Printer
-	if lcfg.NoColor {
-		printer = &RawPrinter{s}
-	} else {
-		printer = &ColorPrinter{s}
+	{
+		if lcfg.NoColor {
+			printer = &RawPrinter{s}
+		} else {
+			printer = &ColorPrinter{s}
+		}
 	}
 
-	filec := NewFileComponent(printer, input, window)
+	filec := NewFileComponent(printer, input, bw)
 	inputc := NewInputComponent(printer, input, 1, 0)
-	footerc := NewFooterComponent(s, printer, ring)
+	footerc := NewFooterComponent(s, printer, bw)
 	return &Screen{
-		cupdate: make(chan struct{}, 1),
 		ts:      s,
+		bufferw: bw,
+		input:   input,
+		header:  inputc,
+		file:    filec,
+		footer:  footerc,
 
-		ring:   ring,
-		window: window,
-
-		input:  input,
-		header: inputc,
-		file:   filec,
-		footer: footerc,
+		cupdate: make(chan struct{}, 1),
 	}, nil
 }
 
@@ -87,7 +100,7 @@ func (s *Screen) Clear() {
 
 func (s *Screen) readfile() {
 	for {
-		_, err := s.ring.Readline()
+		_, err := s.bufferw.Readline()
 		if err != nil {
 			return
 		}
@@ -108,24 +121,17 @@ func (s *Screen) Run() error {
 
 	s.ts.SetStyle(defStyle)
 
-	s.ts.EnableMouse()
+	// s.ts.EnableMouse()
 
 	go s.redrawLoop()
 	go s.readfile()
 
-	var size int
 	for {
 		switch ev := s.ts.PollEvent().(type) {
 		case *tcell.EventError:
 			return fmt.Errorf("interrupted: %w", ev)
 		case *tcell.EventResize:
-			_, h := ev.Size()
 			s.ts.Sync()
-			if size == 0 && h > 0 {
-				s.file.ResetPosition()
-				size = h
-			}
-
 			s.Redraw()
 		case *tcell.EventKey:
 			if ev.Key() == tcell.KeyEscape || ev.Key() == tcell.KeyCtrlC {
@@ -177,22 +183,22 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 
 	switch ev.Key() {
 	case tcell.KeyUp:
-		s.file.CursorAdd(-1 * factor)
+		s.file.CursorAdd(1 * factor)
 	case tcell.KeyRight:
 		s.file.OffsetAdd(2 * factor)
 	case tcell.KeyDown:
-		s.file.CursorAdd(1 * factor)
+		s.file.CursorAdd(-1 * factor)
 	case tcell.KeyLeft:
 		s.file.OffsetAdd(-2 * factor)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		s.input.DeleteBackward()
-		s.window.Update()
+		s.bufferw.Sync()
 	case tcell.KeyEnter:
 		s.file.ResetPosition()
 	default:
 		if r := ev.Rune(); (r >= 41 && r <= 176) || r == ' ' {
 			s.input.Add(r)
-			s.window.Update()
+			s.bufferw.Sync()
 			// s.file.ResetPosition()
 		} else {
 			return nil
