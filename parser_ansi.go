@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"strings"
 
 	"github.com/gdamore/tcell/v2"
 	ansi "github.com/leaanthony/go-ansi-parser"
@@ -80,4 +81,50 @@ type ANSIParser struct {
 
 func (p *ANSIParser) Parse(line string) Line {
 	return ParseANSILine(line, !p.NoColor)
+}
+
+func styledcell(as *ansi.StyledText) (ts tcell.Style) {
+	ts = tcell.StyleDefault
+	if as == nil {
+		return
+	}
+
+	if as.BgCol != nil {
+		name := strings.TrimRight(strings.ToLower(as.BgCol.Name), "123456789")
+		if c, ok := tcell.ColorNames[name]; ok {
+			ts = ts.Background(c)
+		} else {
+			ts = ts.Background(tcell.NewRGBColor(
+				int32(as.BgCol.Rgb.R), int32(as.BgCol.Rgb.G), int32(as.BgCol.Rgb.B),
+			))
+		}
+	}
+
+	if as.FgCol != nil {
+		name := strings.TrimRight(strings.ToLower(as.FgCol.Name), "123456789")
+		if c, ok := tcell.ColorNames[name]; ok {
+			ts = ts.Foreground(c)
+		} else {
+			ts = ts.Foreground(tcell.NewRGBColor(
+				int32(as.FgCol.Rgb.R), int32(as.FgCol.Rgb.G), int32(as.FgCol.Rgb.B),
+			))
+		}
+	}
+
+	return ts.
+		Italic(as.Italic()).
+		Bold(as.Bold()).
+		Underline(as.Underlined()).
+		Reverse(as.Inversed()).
+		Blink(as.Blinking()).
+		StrikeThrough(as.Strikethrough())
+}
+
+func init() {
+	defaultParseOptions = append(defaultParseOptions,
+		ansi.WithDefaultBackgroundColor("black"),
+	)
+	defaultParseOptions = append(defaultParseOptions,
+		ansi.WithDefaultForegroundColor("white"),
+	)
 }

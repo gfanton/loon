@@ -92,7 +92,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 
 func (s *Screen) Clear() {
 	s.muScreen.Lock()
-	// s.ring.Clear()
+	s.bufferw.Clear()
 	s.Redraw()
 	s.muScreen.Unlock()
 
@@ -194,7 +194,7 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 		s.input.DeleteBackward()
 		s.bufferw.Refresh()
 	case tcell.KeyEnter:
-		s.file.ResetPosition()
+		s.bufferw.MoveFront()
 	default:
 		if r := ev.Rune(); (r >= 41 && r <= 176) || r == ' ' {
 			s.input.Add(r)

@@ -72,7 +72,7 @@ func (b *BufferWindow[T]) Readline() (line string, err error) {
 	return
 }
 
-func (b *BufferWindow[T]) Size() (size, length int) {
+func (b *BufferWindow[T]) WindowSize() (size, length int) {
 	b.mu.Lock()
 	size, length = b.window.Size()
 	b.mu.Unlock()
@@ -95,6 +95,33 @@ func (b *BufferWindow[T]) Lock(yes bool) {
 
 func (b *BufferWindow[T]) Refresh() {
 	b.mu.Lock()
+	b.refresh()
+	b.mu.Unlock()
+}
+
+func (b *BufferWindow[T]) MoveFront() {
+	b.mu.Lock()
+	root := b.window.HeadValue()
+	if root == nil {
+		root = b.buffer.Head()
+	}
+	b.moveFrom(root, b.buffer.Size())
+	b.mu.Unlock()
+}
+
+func (b *BufferWindow[T]) MoveBack() {
+	b.mu.Lock()
+	root := b.window.TailValue()
+	if root == nil {
+		root = b.buffer.Head()
+	}
+	b.moveFrom(root, -b.buffer.Size())
+	b.mu.Unlock()
+}
+
+func (b *BufferWindow[T]) Clear() {
+	b.mu.Lock()
+	b.buffer.Reset()
 	b.refresh()
 	b.mu.Unlock()
 }
@@ -128,7 +155,6 @@ func (b *BufferWindow[T]) moveFrom(root *ring.Ring, n int) {
 	switch {
 	case n < 0:
 		DoRingPrev(root, func(r *ring.Ring) bool {
-			// fmt.Printf("from: %v -> down: %v\n", root.Value, r.Value)
 			switch {
 			case r == bufferHead:
 				return false
@@ -144,7 +170,6 @@ func (b *BufferWindow[T]) moveFrom(root *ring.Ring, n int) {
 		})
 
 	case n > 0:
-		// head := b.window.HeadValue()
 		DoRingNext(root, func(r *ring.Ring) bool {
 			if r == bufferHead {
 				b.follow = true
@@ -156,7 +181,6 @@ func (b *BufferWindow[T]) moveFrom(root *ring.Ring, n int) {
 			case r.Value == nil:
 				return false
 			case b.filterRing(r):
-				// fmt.Printf("push %+v\n", r.Value)
 				b.window.PushFront(r)
 				n--
 			}
@@ -178,7 +202,6 @@ func (b *BufferWindow[T]) refresh() {
 	b.window.Reset()
 
 	var wg sync.WaitGroup
-	// var mu sync.Mutex
 
 	b.follow = false
 
@@ -219,26 +242,6 @@ func (b *BufferWindow[T]) refresh() {
 			return !b.window.IsFull() && r != bufferHead
 
 		})
-
-		// var full bool
-		// DoRingNext(windowHead, func(r *ring.Ring) bool {
-		// 	if r.Value == nil {
-		// 		return false
-		// 	}
-
-		// 	if ok := b.filterRing(r); ok {
-		// 		if !full {
-		// 			b.window.PushFront(r)
-		// 		}
-		// 		if r == bufferHead {
-		// 			b.follow = true
-		// 		}
-		// 	}
-
-		// 	full = b.window.IsFull()
-		// 	return (!full || !b.follow) && r != bufferHead
-
-		// })
 		wg.Done()
 	}()
 

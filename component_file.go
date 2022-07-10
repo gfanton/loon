@@ -26,12 +26,6 @@ func NewFileComponent(print Printer, in *Input, bw *BufferWindow[Line]) *FileCom
 	}
 }
 
-func (f *FileComponent) ResetPosition() {
-	f.muPosition.Lock()
-	f.cursorX, f.cursorY = 0, 0
-	f.muPosition.Unlock()
-}
-
 func (f *FileComponent) Follow(n int) {
 	f.muPosition.Lock()
 	if f.lock {
@@ -88,29 +82,8 @@ func (f *FileComponent) updateCursorX(max int) (offset int) {
 func (f *FileComponent) moveBufferCursor() (cursor int) {
 	f.bw.Move(-f.cursorY)
 	f.cursorY = 0
-	// switch {
-	// case f.cursorY < 0:
-	// 	f.bw.Move(-f.cursorY)
-	// 	f.cursorY = 0
-	// 	f.bw.Lock(false)
-	// case f.cursorY > 0:
-	// 	cursor := f.cursorY - max
-	// 	f.bw.Move(-cursor)
-	// 	f.cursorY = max
-	// 	f.bw.Lock(true)
-	// default:
-	// 	f.bw.Lock(true)
-
-	// }
-
 	return f.cursorY
 }
-
-// func (f *FileComponent) updateCursor(width, height int) (offx, offy int) {
-// 	offy = f.moveBufferCursor(height)
-// 	offx = f.updateCursorX(width)
-// 	return
-// }
 
 func (f *FileComponent) Redraw(x, y, width, height int) {
 	if height == 0 || width == 0 {
@@ -121,7 +94,6 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 
 	f.bw.Resize(height)
 
-	// offy := f.moveBufferCursor(height - 1)
 	offy := f.moveBufferCursor()
 
 	lines := f.bw.Slice()
@@ -142,15 +114,8 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 	var i int
 	for ; i < len(lines); i++ {
 		indexy := i + y
-		// rIndexy := height - indexy
 		line := lines[i]
 		line.Print(f.printer, x, indexy, width, int(offx))
-
-		// border := ' '
-		// if offy == rIndexy {
-		// 	border = '>'
-		// }
-		// f.printer.Print(x, indexy, tcell.StyleDefault, string(border))
 	}
 
 	// fillup empty lines

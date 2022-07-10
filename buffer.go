@@ -9,7 +9,7 @@ type Buffer[T any] struct {
 	size int
 	ring *ring.Ring
 
-	offset uint
+	lines  uint
 	muRing sync.RWMutex
 }
 
@@ -24,7 +24,7 @@ func NewBuffer[T any](size int) *Buffer[T] {
 
 func (b *Buffer[T]) AddValue(value T) (node *ring.Ring) {
 	b.muRing.Lock()
-	b.offset++
+	b.lines++
 	b.ring.Value = value
 
 	node = b.ring
@@ -50,7 +50,14 @@ func (b *Buffer[T]) DoPrev(f func(n *ring.Ring, v T) bool) {
 
 func (b *Buffer[T]) Lines() (i uint) {
 	b.muRing.RLock()
-	i = b.offset
+	i = b.lines
+	b.muRing.RUnlock()
+	return
+}
+
+func (b *Buffer[T]) Size() (i int) {
+	b.muRing.RLock()
+	i = b.size
 	b.muRing.RUnlock()
 	return
 }
@@ -68,5 +75,16 @@ func (b *Buffer[T]) Head() (head *ring.Ring) {
 		head = prev
 	}
 	b.muRing.RUnlock()
+	return
+}
+
+func (b *Buffer[T]) Reset() (head *ring.Ring) {
+	b.muRing.Lock()
+	DoRingNext(b.ring, func(r *ring.Ring) bool {
+		r.Value = nil
+		return true
+	})
+	b.lines = 0
+	b.muRing.Unlock()
 	return
 }

@@ -52,7 +52,7 @@ func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 		require.NoError(t, err)
 	}
 	require.Equal(t, uint(tc.ReaderSize), bw.Lines())
-	size, _ := bw.Size()
+	size, _ := bw.WindowSize()
 	require.Equal(t, tc.Height, size)
 	for i, seq := range tc.Sequences {
 		switch v := seq.Sequence.(type) {
@@ -80,7 +80,7 @@ func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 			bw.Refresh()
 		}
 
-		_, length := bw.Size()
+		_, length := bw.WindowSize()
 		matchs := bw.Slice()
 		// log.Printf("lines: %v\n", matchs)
 
@@ -349,45 +349,3 @@ func (p *testParser) Parse(line string) (i int) {
 	}
 	return
 }
-
-// type testParser struct{}
-
-// func (*testParser) Parse(line string) Line {
-// 	return &noopLine{line}
-// }
-
-// var _ Reader = (*testReader)(nil)
-
-// var _ Reader = (*testReader)(nil)
-
-// func newTestLine(value int) *testLine {
-// 	return &testLine{Value: value}
-// }
-
-// func (t *testLine) String() string {
-// 	return strconv.Itoa(t.Value)
-// }
-
-// func (t *testLine) Len() int {
-// 	return len(t.String())
-// }
-
-// func (t *testLine) Print(p Printer, x, y, width, offset int) {}
-
-// type testLine struct {
-// 	Value int
-// }
-
-// func newTestLine(value int) *testLine {
-// 	return &testLine{Value: value}
-// }
-
-// func (t *testLine) String() string {
-// 	return strconv.Itoa(t.Value)
-// }
-
-// func (t *testLine) Len() int {
-// 	return len(t.String())
-// }
-
-// func (t *testLine) Print(p Printer, x, y, width, offset int) {}
