@@ -192,13 +192,13 @@ func (s *Screen) handleEventKey(ev *tcell.EventKey) error {
 		s.file.OffsetAdd(-2 * factor)
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
 		s.input.DeleteBackward()
-		s.bufferw.Sync()
+		s.bufferw.Refresh()
 	case tcell.KeyEnter:
 		s.file.ResetPosition()
 	default:
 		if r := ev.Rune(); (r >= 41 && r <= 176) || r == ' ' {
 			s.input.Add(r)
-			s.bufferw.Sync()
+			s.bufferw.Refresh()
 			// s.file.ResetPosition()
 		} else {
 			return nil

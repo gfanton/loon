@@ -51,10 +51,6 @@ func (b *BufferWindow[T]) Readline() (line string, err error) {
 	if line, err = b.reader.Readline(); err == nil {
 		b.mu.Lock()
 
-		// top := b.buffer.Head() == b.window.HeadValue()
-
-		// fmt.Printf("%+v\n", line)
-
 		pline := b.parser.Parse(line)
 		n := b.buffer.AddValue(pline)
 
@@ -85,13 +81,21 @@ func (b *BufferWindow[T]) Size() (size, length int) {
 
 func (b *BufferWindow[T]) Resize(n int) {
 	b.mu.Lock()
-	b.window.Resize(n)
+	if b.window.Resize(n) {
+		b.refresh()
+	}
 	b.mu.Unlock()
 }
 
 func (b *BufferWindow[T]) Lock(yes bool) {
 	b.mu.Lock()
 	b.lock = yes
+	b.mu.Unlock()
+}
+
+func (b *BufferWindow[T]) Refresh() {
+	b.mu.Lock()
+	b.refresh()
 	b.mu.Unlock()
 }
 
@@ -162,8 +166,7 @@ func (b *BufferWindow[T]) moveFrom(root *ring.Ring, n int) {
 	}
 }
 
-func (b *BufferWindow[T]) Sync() {
-	b.mu.Lock()
+func (b *BufferWindow[T]) refresh() {
 
 	bufferHead := b.buffer.Head()
 	windowHead := b.window.HeadValue()
@@ -240,8 +243,6 @@ func (b *BufferWindow[T]) Sync() {
 	}()
 
 	wg.Wait()
-
-	b.mu.Unlock()
 }
 
 func (b *BufferWindow[T]) Slice() (slice []T) {

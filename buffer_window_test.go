@@ -73,11 +73,11 @@ func testBufferMoveCase(t *testing.T, tc *testBufferCase) {
 		case tSeqResize:
 			t.Logf("step_%d: resizing %d", i+1, int(v))
 			bw.Resize(int(v))
-			bw.Sync()
+			bw.Refresh()
 		case tSeqInput:
 			t.Logf("step_%d: update input: '%s'", i+1, v)
 			input = string(v)
-			bw.Sync()
+			bw.Refresh()
 		}
 
 		_, length := bw.Size()
