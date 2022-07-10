@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"container/ring"
 	"fmt"
 	"io"
 	"os"
@@ -13,81 +12,49 @@ import (
 )
 
 type Reader interface {
-	Lines() int64
+	Lines() int
 	ResetLines()
 	Readline() (string, error)
 }
 
-type File struct {
-	Stdin bool
-	Path  string
-}
-
-func (f *File) NewRing(lcfg *LoonConfig) (*Buffer, error) {
+func NewReader(lcfg *LoonConfig, path string, stdin bool) (Reader, error) {
 	size := lcfg.RingSize
 
-	var parser Parser
-	if lcfg.NoAnsi {
-		parser = &RawParser{}
-	} else {
-		parser = &ANSIParser{NoColor: lcfg.NoColor}
-	}
-
-	if f.Stdin {
+	if stdin {
 		reader := &PipeReader{
 			lines:  0,
 			reader: bufio.NewReader(os.Stdin),
 		}
 
-		return NewBuffer(size, parser, reader), nil
+		return reader, nil
 	}
 
-	var fsize, cursor, lines int64
-	ring := ring.New(size + 1)
-
-	fi, err := os.Stat(f.Path)
-	if err == nil {
-		fsize = fi.Size()
-		cursor, err = getPostionFromBottom(f.Path, int64(size))
+	var cursor int64
+	if _, err := os.Stat(path); err == nil {
+		cursor, err = getPostionFromBottom(path, int64(size))
 		if err != nil {
 			return nil, fmt.Errorf("unable to seek file position: %w", err)
 		}
 	}
 
-	tail, err := f.tailFile(cursor)
+	tail, err := tailFile(cursor, path, stdin)
 	if err != nil {
 		return nil, fmt.Errorf("unable to tail file: %w", err)
 	}
 
-	// fill ring until the end of the file
-	for line := range tail.Lines {
-		ring.Value = line.Text
-		ring = ring.Next()
-		lines++
-
-		if line.SeekInfo.Offset >= fsize {
-			break
-		}
-
-	}
-
-	reader := &FileReader{
-		lines: lines,
+	return &FileReader{
+		lines: 0,
 		tail:  tail,
-	}
-
-	return NewBufferFromRing(ring, parser, reader), nil
+	}, nil
 }
 
-func (f *File) tailFile(cursor int64) (*tail.Tail, error) {
-	var path string
+func tailFile(cursor int64, path string, stdin bool) (*tail.Tail, error) {
 	config := tail.Config{Follow: true}
 
-	if f.Stdin {
+	if stdin {
 		path = os.Stdin.Name()
-		config.Pipe = f.Stdin
-	} else if f.Path != "" {
-		path = f.Path
+		config.Pipe = stdin
+	} else if path != "" {
 		config.Location = &tail.SeekInfo{Offset: cursor}
 	} else {
 		return nil, fmt.Errorf("no valid path given")
@@ -135,7 +102,7 @@ func getPostionFromBottom(path string, lines int64) (int64, error) {
 
 type PipeReader struct {
 	reader *bufio.Reader
-	lines  int64
+	lines  int
 
 	muLines sync.RWMutex
 }
@@ -153,7 +120,7 @@ func (p *PipeReader) Readline() (string, error) {
 	return strings.TrimSuffix(text, "\n"), nil
 }
 
-func (p *PipeReader) Lines() (l int64) {
+func (p *PipeReader) Lines() (l int) {
 	p.muLines.RLock()
 	l = p.lines
 	p.muLines.RUnlock()
@@ -168,12 +135,12 @@ func (p *PipeReader) ResetLines() {
 
 type FileReader struct {
 	tail  *tail.Tail
-	lines int64
+	lines int
 
 	muLines sync.RWMutex
 }
 
-func (f *FileReader) Lines() (l int64) {
+func (f *FileReader) Lines() (l int) {
 	f.muLines.RLock()
 	l = f.lines
 	f.muLines.RUnlock()
