@@ -11,19 +11,22 @@ import (
 type lineSequence struct {
 	Style       tcell.Style
 	Index, Size int
+	Marks       []Mark
 }
 
 type ANSILine struct {
-	seqs    []lineSequence
+	seqs    []*lineSequence
+	marks   []Mark
 	content bytes.Buffer
 }
 
 func ParseANSILine(line string, color bool) *ANSILine {
 	var l ANSILine
 	if st, err := ansi.Parse(line); err == nil {
-		l.seqs = make([]lineSequence, len(st))
+		l.seqs = make([]*lineSequence, len(st))
 		var index int
 		for i, s := range st {
+			l.seqs[i] = &lineSequence{}
 			l.content.WriteString(s.Label)
 			if color {
 				l.seqs[i].Style = styledcell(s)
@@ -32,6 +35,7 @@ func ParseANSILine(line string, color bool) *ANSILine {
 			}
 			l.seqs[i].Size = len(s.Label)
 			l.seqs[i].Index = index
+			l.seqs[i].Marks = []Mark{}
 			index += len(s.Label)
 		}
 	} else {
@@ -42,29 +46,43 @@ func ParseANSILine(line string, color bool) *ANSILine {
 }
 
 func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
-
 	content := l.content.Bytes()
+	xmark := x
 	for _, s := range l.seqs {
-		// if s.Index > width {
-		// 	break
-		// }
-
-		to := s.Index + s.Size
-		if offset >= to {
+		from, to := s.Index, s.Index+s.Size
+		if offset >= to || from > (width+offset) {
 			continue
 		}
 
-		from := s.Index
-		if offset >= from && offset < to {
+		if offset >= from {
 			from = offset
 		}
 
 		str := content[from:to]
 		p.Print(x, y, s.Style, string(str))
+
 		x += len(str)
 	}
 
+	for _, m := range l.marks {
+		from, to := m.Off, m.Off+m.Len
+		if offset >= to || from > (width+offset) {
+			continue
+		}
+
+		if offset >= from {
+			from = offset
+		}
+
+		str := content[from:to]
+		p.Print(xmark+from-offset, y, tcell.StyleDefault.Reverse(true).Bold(true), string(str))
+	}
+
 	fillUpLine(p, x, y, width)
+}
+
+func (l *ANSILine) SetMarks(marks ...Mark) {
+	l.marks = marks
 }
 
 func (l *ANSILine) String() string {

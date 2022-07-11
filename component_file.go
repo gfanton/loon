@@ -71,7 +71,7 @@ func (f *FileComponent) MoveAdd(x, y int) {
 func (f *FileComponent) updateCursorX(max int) (offset int) {
 	if f.cursorX < 0 {
 		f.cursorX = 0
-	} else if max = max - 1; f.cursorX > max {
+	} else if f.cursorX > max {
 		f.cursorX = max
 	}
 
