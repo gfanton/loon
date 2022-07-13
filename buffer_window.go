@@ -156,9 +156,7 @@ func (b *BufferWindow[T]) moveFrom(root *ring.Ring, n int) {
 	case n < 0:
 		DoRingPrev(root, func(r *ring.Ring) bool {
 			switch {
-			case r == bufferHead:
-				return false
-			case r.Value == nil:
+			case r == bufferHead, r.Value == nil:
 				return false
 			case b.filterRing(r):
 				b.follow = false

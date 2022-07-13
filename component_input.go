@@ -34,13 +34,19 @@ func NewInputComponent(p Printer, input *Input, xpos, ypos int) *InputComponent 
 }
 
 func (i *InputComponent) Redraw(x, y, width, height int) {
+	style := tcell.StyleDefault
 	input := i.input.Get()
+	if input == "" {
+		input = ":"
+		style = style.Blink(true)
+	}
+
 	var offset int
 	if size := len(input); size > width {
 		offset = size - width
 	}
 
-	xoffset := i.printer.Print(x, y, tcell.StyleDefault, input[offset:])
+	xoffset := i.printer.Print(x, y, style, input[offset:])
 	fillUpLine(i.printer, xoffset, y, width)
 }
 

@@ -73,7 +73,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 				}
 
 				marks = append(marks, Mark{Off: index + i, Len: len(in)})
-				i += index + len(in) + 1
+				i += index + len(in)
 			}
 
 		}
@@ -121,6 +121,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 
 func (s *Screen) Clear() {
 	s.muScreen.Lock()
+	s.ts.Clear()
 	s.bufferw.Clear()
 	s.Redraw()
 	s.muScreen.Unlock()
