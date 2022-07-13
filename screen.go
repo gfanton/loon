@@ -10,7 +10,7 @@ import (
 )
 
 type Mark struct {
-	Off, Len int
+	N, Off, Len int
 }
 
 type Line interface {
@@ -59,7 +59,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 		marks := []Mark{}
 		lineLen := l.Len()
 		line := l.String()
-		for _, in := range inputs {
+		for n, in := range inputs {
 			if len(in) == 0 {
 				l.SetMarks(marks...)
 				return true
@@ -72,7 +72,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 					break
 				}
 
-				marks = append(marks, Mark{Off: index + i, Len: len(in)})
+				marks = append(marks, Mark{N: n, Off: index + i, Len: len(in)})
 				i += index + len(in)
 			}
 
