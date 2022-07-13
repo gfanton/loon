@@ -2,13 +2,19 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
 	"github.com/gdamore/tcell/v2/encoding"
 )
 
+type Mark struct {
+	Off, Len int
+}
+
 type Line interface {
+	SetMarks(ms ...Mark)
 	Print(p Printer, x, y, width, offset int)
 	String() string
 	Len() int
@@ -48,9 +54,32 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 	input := &Input{}
 
 	// create filter
-	filter := func(l Line) bool {
-		yes := simpleFilter(input.Get(), l.String())
-		return yes
+	filter := func(l Line) (yes bool) {
+		inputs := strings.Split(input.Get(), " ")
+		marks := []Mark{}
+		lineLen := l.Len()
+		line := l.String()
+		for _, in := range inputs {
+			if len(in) == 0 {
+				l.SetMarks(marks...)
+				return true
+			}
+
+			for i := 0; i < lineLen; {
+				cutseq := line[i:]
+				index := strings.Index(cutseq, in)
+				if index < 0 {
+					break
+				}
+
+				marks = append(marks, Mark{Off: index + i, Len: len(in)})
+				i += index + len(in)
+			}
+
+		}
+
+		l.SetMarks(marks...)
+		return len(marks) > 0
 	}
 
 	// create buffer
@@ -92,6 +121,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 
 func (s *Screen) Clear() {
 	s.muScreen.Lock()
+	s.ts.Clear()
 	s.bufferw.Clear()
 	s.Redraw()
 	s.muScreen.Unlock()

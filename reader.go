@@ -49,7 +49,11 @@ func NewReader(lcfg *LoonConfig, path string, stdin bool) (Reader, error) {
 }
 
 func tailFile(cursor int64, path string, stdin bool) (*tail.Tail, error) {
-	config := tail.Config{Follow: true}
+	config := tail.Config{
+		ReOpen: true,
+		Follow: true,
+		Logger: tail.DiscardingLogger,
+	}
 
 	if stdin {
 		path = os.Stdin.Name()

@@ -2,6 +2,10 @@ package main
 
 import "github.com/gdamore/tcell/v2"
 
+type rawMark struct {
+	off, len int
+}
+
 type RawLine struct {
 	line string
 }
@@ -19,6 +23,9 @@ func (l *RawLine) Print(p Printer, x, y, width, offset int) {
 
 func (l *RawLine) String() string {
 	return l.line
+}
+
+func (l *RawLine) SetMarks(marks ...Mark) {
 }
 
 func (l *RawLine) Len() int {

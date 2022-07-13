@@ -69,9 +69,10 @@ func (f *FileComponent) MoveAdd(x, y int) {
 }
 
 func (f *FileComponent) updateCursorX(max int) (offset int) {
-	if f.cursorX < 0 {
+	switch {
+	case f.cursorX < 0, max < 0:
 		f.cursorX = 0
-	} else if max = max - 1; f.cursorX > max {
+	case f.cursorX > max:
 		f.cursorX = max
 	}
 
@@ -111,6 +112,7 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 
 	offx := f.updateCursorX(maxc - width)
 
+	// fill window ring lines
 	var i int
 	for ; i < len(lines); i++ {
 		indexy := i + y
