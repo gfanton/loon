@@ -18,7 +18,13 @@ func (l *RawLine) Print(p Printer, x, y, width, offset int) {
 	if offset >= len(l.line) {
 		return
 	}
-	p.Print(x, y, tcell.StyleDefault, l.line[offset:])
+
+	str := l.line[offset:]
+	p.Print(x, y, tcell.StyleDefault, str)
+
+	if len(str) < width {
+		fillUpLine(p, len(str), y, width)
+	}
 }
 
 func (l *RawLine) String() string {
