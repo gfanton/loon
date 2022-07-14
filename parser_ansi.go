@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"hash/fnv"
 	"strings"
 
 	"github.com/gdamore/tcell/v2"
@@ -75,7 +76,8 @@ func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 		}
 
 		str := content[from:to]
-		p.Print(xmark+from-offset, y, tcell.StyleDefault.Reverse(true).Bold(true), string(str))
+		style := tcell.StyleDefault.Background(getMarkColor(m.N)).Reverse(true).Bold(true)
+		p.Print(xmark+from-offset, y, style, string(str))
 	}
 
 	fillUpLine(p, x, y, width)
@@ -136,6 +138,29 @@ func styledcell(as *ansi.StyledText) (ts tcell.Style) {
 		Reverse(as.Inversed()).
 		Blink(as.Blinking()).
 		StrikeThrough(as.Strikethrough())
+}
+
+var markColors = []tcell.Color{
+	tcell.ColorDefault,
+	tcell.ColorDarkRed,
+	tcell.ColorDarkBlue,
+	tcell.ColorDarkGreen,
+	tcell.ColorDarkOrange,
+	tcell.ColorDarkMagenta,
+	tcell.ColorDarkOliveGreen,
+	tcell.ColorDarkCyan,
+	tcell.ColorDarkTurquoise,
+	tcell.ColorDarkViolet,
+}
+
+func getMarkColor(n int) tcell.Color {
+	return markColors[n%len(markColors)]
+}
+
+func hashString(s string) uint32 {
+	h := fnv.New32a()
+	h.Write([]byte(s))
+	return h.Sum32()
 }
 
 func init() {
