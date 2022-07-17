@@ -46,9 +46,7 @@ func ParseANSILine(line string, color bool) *ANSILine {
 	return &l
 }
 
-func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
-	content := l.content.Bytes()
-	xmark := x
+func (l *ANSILine) printSeqs(p Printer, content []byte, x, y, width, offset int) (pl int) {
 	for _, s := range l.seqs {
 		from, to := s.Index, s.Index+s.Size
 		if offset >= to || from > (width+offset) {
@@ -62,9 +60,15 @@ func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 		str := content[from:to]
 		p.Print(x, y, s.Style, string(str))
 
-		x += len(str)
+		x += len(str) // x offset
 	}
 
+	fillUpLine(p, x, y, width)
+
+	return
+}
+
+func (l *ANSILine) printMarks(p Printer, content []byte, x, y, width, offset int) {
 	for _, m := range l.marks {
 		from, to := m.Off, m.Off+m.Len
 		if offset >= to || from > (width+offset) {
@@ -77,10 +81,14 @@ func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
 
 		str := content[from:to]
 		style := tcell.StyleDefault.Background(getMarkColor(m.N)).Reverse(true).Bold(true)
-		p.Print(xmark+from-offset, y, style, string(str))
+		p.Print(x+from-offset, y, style, string(str))
 	}
+}
 
-	fillUpLine(p, x, y, width)
+func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
+	content := l.content.Bytes()
+	l.printSeqs(p, content, x, y, width, offset)
+	l.printMarks(p, content, x, y, width, offset)
 }
 
 func (l *ANSILine) SetMarks(marks ...Mark) {

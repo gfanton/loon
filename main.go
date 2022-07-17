@@ -18,6 +18,7 @@ type LoonConfig struct {
 	ConfigFile string
 	NoColor    bool
 	NoAnsi     bool
+	Debug      bool
 	Json       bool
 }
 
@@ -36,6 +37,7 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 	rootFlagSet.BoolVar(&cfg.NoColor, "nocolor", false, "disable color")
 	rootFlagSet.BoolVar(&cfg.NoAnsi, "noansi", false, "do not parse ansi sequence")
 	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring line size")
+	rootFlagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode")
 
 	err := ff.Parse(rootFlagSet, args,
 		ff.WithEnvVarPrefix("LOON"),

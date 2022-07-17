@@ -47,12 +47,13 @@ func NewBufferWindow[T any](size int, opts *BufferWindowOptions[T]) *BufferWindo
 	}
 }
 
-func (b *BufferWindow[T]) Readline() (line string, err error) {
+func (b *BufferWindow[T]) Readline() (value T, err error) {
+	var line string
 	if line, err = b.reader.Readline(); err == nil {
 		b.mu.Lock()
 
-		pline := b.parser.Parse(line)
-		n := b.buffer.AddValue(pline)
+		value = b.parser.Parse(line)
+		n := b.buffer.AddValue(value)
 
 		switch {
 		case b.window.IsEmpty():
@@ -252,21 +253,44 @@ func (b *BufferWindow[T]) Slice() (slice []T) {
 	b.mu.Unlock()
 	return
 }
+
 func (b *BufferWindow[T]) slice() []T {
 	_, l := b.window.Size()
 	slice := make([]T, l)
 
 	i := 0
-	b.window.Do(func(r *ring.Ring) {
+	b.window.Do(func(r *ring.Ring) bool {
 		if i >= l {
-			return
+			return false
 		}
 
 		slice[i] = r.Value.(T)
 		i++
+		return true
 	})
 
 	return slice
+}
+
+func (b *BufferWindow[T]) Do(f func(i int, v T) bool) (size int) {
+	b.mu.Lock()
+
+	_, l := b.window.Size()
+
+	b.window.Do(func(r *ring.Ring) (ok bool) {
+		if size >= l {
+			return false
+		}
+
+		ok = f(size, r.Value.(T))
+		size++
+		return
+	})
+
+	b.mu.Unlock()
+
+	return size
+
 }
 
 func (b *BufferWindow[T]) Lines() (l uint) {

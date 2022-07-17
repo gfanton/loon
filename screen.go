@@ -54,6 +54,7 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 	input := &Input{}
 
 	// create filter
+	// @TODO: move this elsewhere
 	filter := func(l Line) (yes bool) {
 		inputs := strings.Split(input.Get(), " ")
 		marks := []Mark{}
@@ -129,10 +130,17 @@ func (s *Screen) Clear() {
 }
 
 func (s *Screen) readfile() {
+	var maxLineSize int
+
 	for {
-		_, err := s.bufferw.Readline()
+		line, err := s.bufferw.Readline()
 		if err != nil {
 			return
+		}
+
+		if l := line.Len(); l > maxLineSize {
+			maxLineSize = l
+			s.file.SetMaxOffset(l)
 		}
 
 		s.Redraw()

@@ -90,7 +90,7 @@ func (w *Window[T]) TailValue() (value T) {
 	return
 }
 
-func (w *Window[T]) Do(f func(v T)) {
+func (w *Window[T]) Do(f func(v T) bool) {
 	w.muRing.RLock()
 
 	DoRingNext(w.tail, func(r *ring.Ring) bool {
@@ -98,8 +98,7 @@ func (w *Window[T]) Do(f func(v T)) {
 			return false
 		}
 
-		f(r.Value.(T))
-		return true
+		return f(r.Value.(T))
 	})
 
 	w.muRing.RUnlock()
