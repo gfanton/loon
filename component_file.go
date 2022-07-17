@@ -13,7 +13,6 @@ type FileComponent struct {
 	printer Printer
 
 	muPosition              sync.RWMutex
-	lock                    bool
 	cursorX, cursorY, psize int
 	maxOffsetX              int
 }
@@ -22,16 +21,7 @@ func NewFileComponent(print Printer, in *Input, bw *BufferWindow[Line]) *FileCom
 	return &FileComponent{
 		printer: print,
 		bw:      bw,
-		lock:    true,
 	}
-}
-
-func (f *FileComponent) Follow(n int) {
-	f.muPosition.Lock()
-	if f.lock {
-		f.cursorY -= n
-	}
-	f.muPosition.Unlock()
 }
 
 func (f *FileComponent) CursorAdd(y int) {
@@ -53,11 +43,14 @@ func (f *FileComponent) MaxOffset() (x int) {
 	return
 }
 
+func (f *FileComponent) SetMaxOffset(x int) {
+	f.muPosition.Lock()
+	f.maxOffsetX = x
+	f.muPosition.Unlock()
+}
+
 func (f *FileComponent) OffsetSet(x int) {
 	f.muPosition.Lock()
-	if x > f.maxOffsetX {
-		x = f.maxOffsetX
-	}
 	f.cursorX = x
 	f.muPosition.Unlock()
 }
@@ -76,7 +69,6 @@ func (f *FileComponent) updateCursorX(max int) (offset int) {
 		f.cursorX = max
 	}
 
-	f.maxOffsetX = max
 	return f.cursorX
 }
 
@@ -96,6 +88,7 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 	f.bw.Resize(height)
 
 	offy := f.moveBufferCursor()
+	offx := f.updateCursorX(f.maxOffsetX - width)
 
 	lines := f.bw.Slice()
 
@@ -103,26 +96,16 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 		offy, f.cursorY = maxc, maxc
 	}
 
-	var maxc int
-	for _, line := range lines {
-		if ll := line.Len(); ll > maxc {
-			maxc = ll
-		}
-	}
-
-	offx := f.updateCursorX(maxc - width)
-
-	// fill window ring lines
-	var i int
-	for ; i < len(lines); i++ {
+	size := f.bw.Do(func(i int, l Line) bool {
 		indexy := i + y
 		line := lines[i]
 		line.Print(f.printer, x, indexy, width, int(offx))
-	}
+		return true
+	})
 
 	// fillup empty lines
-	for ; i < height; i++ {
-		indexy := i + y
+	for ; size < height; size++ {
+		indexy := size + y
 		f.printer.Print(x, indexy, tcell.StyleDefault, "~")
 		fillUpLine(f.printer, x+1, indexy, width)
 	}

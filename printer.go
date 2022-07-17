@@ -12,13 +12,15 @@ type Printer interface {
 }
 
 func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) int {
+	var comb []rune
+
 	for _, c := range str {
-		var comb []rune
 		w := runewidth.RuneWidth(c)
 		if w == 0 {
-			c = ' '
-			w = 1
+			c = 0
+			w = 0
 		}
+
 		s.SetContent(x, y, c, comb, style)
 		x += w
 	}
@@ -27,7 +29,7 @@ func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) int {
 }
 
 func fillUpLine(printer Printer, startx, y, width int) {
-	// fillup screen
+	// fillup line with empty space
 	if startx < width {
 		printer.Print(startx, y, tcell.StyleDefault, strings.Repeat(" ", width-startx))
 	}
@@ -49,6 +51,35 @@ type RawPrinter struct {
 	s tcell.Screen
 }
 
-func (cp *RawPrinter) Print(x, y int, style tcell.Style, str string) int {
-	return emitStr(cp.s, x, y, tcell.StyleDefault, str)
+func (rp *RawPrinter) Print(x, y int, style tcell.Style, str string) int {
+	return emitStr(rp.s, x, y, tcell.StyleDefault, str)
 }
+
+// func emitTruncateStr(s tcell.Screen, x, y int, style tcell.Style, str string) (int, int) {
+// 	sw, sh := s.Size()
+
+// 	var comb []rune
+
+// 	for _, c := range str {
+// 		w := runewidth.RuneWidth(c)
+// 		if w == 0 {
+// 			c = 0
+// 			w = 0
+// 		}
+
+// 		if x >= sw {
+// 			s.SetContent(x, y, tcell.RuneDegree, comb, style)
+// 			x = 0
+// 			y += 1
+// 		}
+
+// 		s.SetContent(x, y, c, comb, style)
+// 		x += w
+
+// 		if y > sh {
+// 			return x, y
+// 		}
+// 	}
+
+// 	return x, y
+// }

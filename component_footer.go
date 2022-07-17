@@ -26,5 +26,6 @@ func (i *FooterComponent) Redraw(x, y, width, height int) {
 	lines := i.buffer.Lines()
 	line := fmt.Sprintf("height: %d, width: %d, lines: %d", h, w, lines)
 
-	i.printer.Print(x, y, tcell.StyleDefault, line)
+	xoffset := i.printer.Print(x, y, tcell.StyleDefault, line)
+	fillUpLine(i.printer, xoffset, y, width)
 }
