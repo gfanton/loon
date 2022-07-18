@@ -15,11 +15,17 @@ import (
 
 type LoonConfig struct {
 	RingSize   int
+	LineSize   int
 	ConfigFile string
-	NoColor    bool
-	NoAnsi     bool
-	Debug      bool
 	Json       bool
+
+	// color
+	NoColor       bool
+	NoAnsi        bool
+	BgSourceColor bool
+	FgSourceColor bool
+
+	// Debug      bool
 }
 
 // flags
@@ -33,11 +39,15 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 	defaultLoonConfig := expandPath("~/.loonrc")
 
 	rootFlagSet.StringVar(&cfg.ConfigFile, "config", defaultLoonConfig, "root config project")
+
 	rootFlagSet.BoolVar(&cfg.Json, "json", false, "parsed is a json line file")
 	rootFlagSet.BoolVar(&cfg.NoColor, "nocolor", false, "disable color")
 	rootFlagSet.BoolVar(&cfg.NoAnsi, "noansi", false, "do not parse ansi sequence")
-	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring line size")
-	rootFlagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode")
+	rootFlagSet.BoolVar(&cfg.BgSourceColor, "bgcolor", false, "enable background color on multiple sources")
+	rootFlagSet.BoolVar(&cfg.FgSourceColor, "fgcolor", true, "enable forground color on multiple sources")
+	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring line capacity")
+	rootFlagSet.IntVar(&cfg.LineSize, "linesize", 10000, "max line size")
+	// rootFlagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode") // @TODO
 
 	err := ff.Parse(rootFlagSet, args,
 		ff.WithEnvVarPrefix("LOON"),
@@ -66,25 +76,48 @@ func main() {
 	}
 
 	root := &ffcli.Command{
-		Name:    "loon [flags] <file>",
+		Name:    "loon [flags] <files...>",
 		FlagSet: rootFlagSet,
 		Exec: func(ctx context.Context, args []string) error {
-			var stdin bool
-			var path string
+			readers := []Reader{}
 
-			fi, _ := os.Stdin.Stat()
-			if (fi.Mode() & os.ModeCharDevice) == 0 {
-				stdin = true
-				path = os.Stdin.Name()
-			} else if len(args) == 1 {
-				path = args[0]
-			} else {
-				return flag.ErrHelp
+			// check stdin
+			{
+				fi, _ := os.Stdin.Stat()
+				if (fi.Mode() & os.ModeCharDevice) == 0 {
+					path, stdin := os.Stdin.Name(), true
+					file := NewFile(path, stdin)
+					reader, err := NewReader(lcfg, file)
+					if err != nil {
+						return fmt.Errorf("unable to create reader from stdin: %w", err)
+					}
+
+					readers = append(readers, reader)
+				}
 			}
 
-			reader, err := NewReader(lcfg, path, stdin)
-			if err != nil {
-				return fmt.Errorf("unable to init ring: %w", err)
+			// check for files
+			{
+				for _, arg := range args {
+					file := NewFile(arg, false)
+					reader, err := NewReader(lcfg, file)
+					if err != nil {
+						return fmt.Errorf("unable to create reader from `%s`: %w", arg, err)
+					}
+
+					readers = append(readers, reader)
+				}
+			}
+
+			var reader Reader
+
+			switch len(readers) {
+			case 0:
+				return flag.ErrHelp
+			case 1:
+				reader = readers[0]
+			default:
+				reader = NewMultiReader(readers...)
 			}
 
 			s, err := NewScreen(lcfg, reader)

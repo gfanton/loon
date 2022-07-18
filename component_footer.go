@@ -9,10 +9,10 @@ import (
 type FooterComponent struct {
 	s       tcell.Screen
 	printer Printer
-	buffer  *BufferWindow[Line]
+	buffer  *BufferWindowLine
 }
 
-func NewFooterComponent(s tcell.Screen, p Printer, buffer *BufferWindow[Line]) *FooterComponent {
+func NewFooterComponent(lcfg *LoonConfig, s tcell.Screen, p Printer, buffer *BufferWindowLine) *FooterComponent {
 	return &FooterComponent{
 		s:       s,
 		printer: p,
@@ -27,5 +27,5 @@ func (i *FooterComponent) Redraw(x, y, width, height int) {
 	line := fmt.Sprintf("height: %d, width: %d, lines: %d", h, w, lines)
 
 	xoffset := i.printer.Print(x, y, tcell.StyleDefault, line)
-	fillUpLine(i.printer, xoffset, y, width)
+	fillUpLine(i.printer, xoffset, y, width, tcell.StyleDefault)
 }

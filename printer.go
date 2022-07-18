@@ -28,10 +28,10 @@ func emitStr(s tcell.Screen, x, y int, style tcell.Style, str string) int {
 	return x
 }
 
-func fillUpLine(printer Printer, startx, y, width int) {
+func fillUpLine(printer Printer, startx, y, width int, style tcell.Style) {
 	// fillup line with empty space
 	if startx < width {
-		printer.Print(startx, y, tcell.StyleDefault, strings.Repeat(" ", width-startx))
+		printer.Print(startx, y, style, strings.Repeat(" ", width-startx))
 	}
 }
 

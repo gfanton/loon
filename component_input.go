@@ -25,7 +25,7 @@ type InputComponent struct {
 	printer Printer
 }
 
-func NewInputComponent(p Printer, input *Input, xpos, ypos int) *InputComponent {
+func NewInputComponent(lcfg *LoonConfig, p Printer, input *Input, xpos, ypos int) *InputComponent {
 	return &InputComponent{
 		input:   input,
 		printer: p,
@@ -47,7 +47,7 @@ func (i *InputComponent) Redraw(x, y, width, height int) {
 	}
 
 	xoffset := i.printer.Print(x, y, style, input[offset:])
-	fillUpLine(i.printer, xoffset, y, width)
+	fillUpLine(i.printer, xoffset, y, width, tcell.StyleDefault)
 }
 
 type Input struct {

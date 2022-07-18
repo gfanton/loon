@@ -12,13 +12,14 @@ import (
 type lineSequence struct {
 	Style       tcell.Style
 	Index, Size int
-	Marks       []Mark
 }
 
 type ANSILine struct {
+	content bytes.Buffer
+	sid     SourceID
+	bgcol   tcell.Color
 	seqs    []*lineSequence
 	marks   []Mark
-	content bytes.Buffer
 }
 
 func ParseANSILine(line string, color bool) *ANSILine {
@@ -36,7 +37,6 @@ func ParseANSILine(line string, color bool) *ANSILine {
 			}
 			l.seqs[i].Size = len(s.Label)
 			l.seqs[i].Index = index
-			l.seqs[i].Marks = []Mark{}
 			index += len(s.Label)
 		}
 	} else {
@@ -58,13 +58,12 @@ func (l *ANSILine) printSeqs(p Printer, content []byte, x, y, width, offset int)
 		}
 
 		str := content[from:to]
-		p.Print(x, y, s.Style, string(str))
+		p.Print(x, y, s.Style.Background(l.bgcol), string(str))
 
 		x += len(str) // x offset
 	}
 
-	fillUpLine(p, x, y, width)
-
+	fillUpLine(p, x, y, width, tcell.StyleDefault.Background(l.bgcol))
 	return
 }
 
@@ -83,6 +82,10 @@ func (l *ANSILine) printMarks(p Printer, content []byte, x, y, width, offset int
 		style := tcell.StyleDefault.Background(getMarkColor(m.N)).Reverse(true).Bold(true)
 		p.Print(x+from-offset, y, style, string(str))
 	}
+}
+
+func (l *ANSILine) Source() SourceID {
+	return l.sid
 }
 
 func (l *ANSILine) Print(p Printer, x, y, width, offset int) {
@@ -104,11 +107,17 @@ func (l *ANSILine) Len() int {
 }
 
 type ANSIParser struct {
-	NoColor bool
+	NoColor     bool
+	SourceColor bool
 }
 
-func (p *ANSIParser) Parse(line string) Line {
-	return ParseANSILine(line, !p.NoColor)
+func (p *ANSIParser) Parse(sid SourceID, line string) Line {
+	ansiline := ParseANSILine(line, !p.NoColor)
+	ansiline.sid = sid
+	if p.SourceColor {
+		ansiline.bgcol = sid.Color(0.75)
+	}
+	return ansiline
 }
 
 func styledcell(as *ansi.StyledText) (ts tcell.Style) {

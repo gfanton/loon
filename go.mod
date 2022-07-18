@@ -10,6 +10,7 @@ require (
 	github.com/oklog/run v1.1.0
 	github.com/peterbourgon/ff/v3 v3.1.2
 	github.com/stretchr/testify v1.7.2
+	github.com/teacat/noire v1.1.0
 )
 
 require (
