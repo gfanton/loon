@@ -7,11 +7,12 @@ type rawMark struct {
 }
 
 type RawLine struct {
+	sid  SourceID
 	line string
 }
 
-func ParseRawLine(line string) *RawLine {
-	return &RawLine{line}
+func ParseRawLine(sid SourceID, line string) *RawLine {
+	return &RawLine{sid, line}
 }
 
 func (l *RawLine) Print(p Printer, x, y, width, offset int) {
@@ -23,12 +24,16 @@ func (l *RawLine) Print(p Printer, x, y, width, offset int) {
 	p.Print(x, y, tcell.StyleDefault, str)
 
 	if len(str) < width {
-		fillUpLine(p, len(str), y, width)
+		fillUpLine(p, len(str), y, width, tcell.StyleDefault)
 	}
 }
 
 func (l *RawLine) String() string {
 	return l.line
+}
+
+func (l *RawLine) Source() SourceID {
+	return l.sid
 }
 
 func (l *RawLine) SetMarks(marks ...Mark) {
@@ -40,6 +45,6 @@ func (l *RawLine) Len() int {
 
 type RawParser struct{}
 
-func (*RawParser) Parse(line string) Line {
-	return ParseRawLine(line)
+func (*RawParser) Parse(sid SourceID, line string) Line {
+	return ParseRawLine(sid, line)
 }

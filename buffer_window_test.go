@@ -335,14 +335,18 @@ func (r *testReader) ResetLines() {
 	r.index = 0
 }
 
-func (r *testReader) Readline() (string, error) {
+func (r *testReader) Sources() []File {
+	return []File{{0, "", false}}
+}
+
+func (r *testReader) Readline() (string, SourceID, error) {
 	index := atomic.AddInt32(&r.index, 1)
-	return strconv.Itoa(int(index)), nil
+	return strconv.Itoa(int(index)), 0, nil
 }
 
 type testParser struct{}
 
-func (p *testParser) Parse(line string) (i int) {
+func (p *testParser) Parse(sid SourceID, line string) (i int) {
 	var err error
 	if i, err = strconv.Atoi(line); err != nil {
 		i = 0

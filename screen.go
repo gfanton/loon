@@ -13,12 +13,16 @@ type Mark struct {
 	N, Off, Len int
 }
 
+// @TODO: move this elsewhere
 type Line interface {
 	SetMarks(ms ...Mark)
 	Print(p Printer, x, y, width, offset int)
 	String() string
 	Len() int
+	Source() SourceID
 }
+
+type BufferWindowLine = BufferWindow[Line]
 
 type Screen struct {
 	muScreen sync.RWMutex
@@ -26,7 +30,7 @@ type Screen struct {
 	ts      tcell.Screen
 	cupdate chan struct{}
 
-	bufferw *BufferWindow[Line]
+	bufferw *BufferWindowLine
 	input   *Input
 	header  *InputComponent
 	file    *FileComponent
@@ -40,13 +44,18 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 		return nil, fmt.Errorf("unable to create new screen: %w", err)
 	}
 
+	sources := reader.Sources()
+
 	// create parser
 	var parser Parser[Line]
 	{
 		if lcfg.NoAnsi {
 			parser = &RawParser{}
 		} else {
-			parser = &ANSIParser{NoColor: lcfg.NoColor}
+			parser = &ANSIParser{
+				NoColor:     lcfg.NoColor,
+				SourceColor: len(sources) > 1 && lcfg.BgSourceColor,
+			}
 		}
 	}
 
@@ -105,9 +114,9 @@ func NewScreen(lcfg *LoonConfig, reader Reader) (*Screen, error) {
 		}
 	}
 
-	filec := NewFileComponent(printer, input, bw)
-	inputc := NewInputComponent(printer, input, 1, 0)
-	footerc := NewFooterComponent(s, printer, bw)
+	filec := NewFileComponent(lcfg, printer, sources, input, bw)
+	inputc := NewInputComponent(lcfg, printer, input, 1, 0)
+	footerc := NewFooterComponent(lcfg, s, printer, bw)
 	return &Screen{
 		ts:      s,
 		bufferw: bw,

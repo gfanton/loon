@@ -1,10 +1,18 @@
 package main
 
 import (
+	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/gdamore/tcell/v2"
 )
+
+type sourceFile struct {
+	name                 string
+	colorDark, colorLigh tcell.Color
+	file                 File
+}
 
 type FileComponent struct {
 	input *Input
@@ -15,12 +23,48 @@ type FileComponent struct {
 	muPosition              sync.RWMutex
 	cursorX, cursorY, psize int
 	maxOffsetX              int
+
+	multisources bool
+	sources      map[SourceID]*sourceFile
+	sourcesize   int
 }
 
-func NewFileComponent(print Printer, in *Input, bw *BufferWindow[Line]) *FileComponent {
+func NewFileComponent(lcfg *LoonConfig, print Printer, sources []File, in *Input, bw *BufferWindowLine) *FileComponent {
+	smap := make(map[SourceID]*sourceFile)
+	var maxNameSize int
+	for _, f := range sources {
+		name := filepath.Base(f.Path)
+		if len(name) > maxNameSize {
+			maxNameSize = len(name)
+		}
+
+		sf := &sourceFile{
+			name: name,
+			file: f,
+		}
+
+		if lcfg.BgSourceColor {
+			sf.colorLigh = f.ID.Color(0.75)
+		}
+
+		if lcfg.FgSourceColor {
+			sf.colorDark = f.ID.Color(0)
+		}
+
+		smap[f.ID] = sf
+
+	}
+
+	formatmask := fmt.Sprintf("%%-%ds | ", maxNameSize)
+	for _, s := range smap {
+		s.name = fmt.Sprintf(formatmask, s.name)
+	}
+
 	return &FileComponent{
-		printer: print,
-		bw:      bw,
+		printer:      print,
+		bw:           bw,
+		multisources: len(sources) > 1,
+		sources:      smap,
 	}
 }
 
@@ -78,6 +122,17 @@ func (f *FileComponent) moveBufferCursor() (cursor int) {
 	return f.cursorY
 }
 
+func (f *FileComponent) printSource(sid SourceID, x, y, offset int) (int, int) {
+	s := f.sources[sid]
+
+	if offset <= len(s.name) {
+		x = f.printer.Print(x, y, tcell.StyleDefault.Foreground(s.colorDark).Background(s.colorLigh), s.name[offset:])
+		offset = 0
+	}
+
+	return x, offset - len(s.name)
+}
+
 func (f *FileComponent) Redraw(x, y, width, height int) {
 	if height == 0 || width == 0 {
 		return
@@ -99,7 +154,13 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 	size := f.bw.Do(func(i int, l Line) bool {
 		indexy := i + y
 		line := lines[i]
-		line.Print(f.printer, x, indexy, width, int(offx))
+
+		sx, soffset := x, offx
+		if f.multisources {
+			sx, soffset = f.printSource(line.Source(), x, indexy, offx)
+		}
+
+		line.Print(f.printer, sx, indexy, width, soffset)
 		return true
 	})
 
@@ -107,7 +168,7 @@ func (f *FileComponent) Redraw(x, y, width, height int) {
 	for ; size < height; size++ {
 		indexy := size + y
 		f.printer.Print(x, indexy, tcell.StyleDefault, "~")
-		fillUpLine(f.printer, x+1, indexy, width)
+		fillUpLine(f.printer, x+1, indexy, width, tcell.StyleDefault)
 	}
 
 	f.muPosition.Unlock()

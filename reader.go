@@ -1,70 +1,89 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"sync"
 
+	"github.com/gdamore/tcell/v2"
 	"github.com/nxadm/tail"
+	"github.com/teacat/noire"
 )
 
 type Reader interface {
 	Lines() int
 	ResetLines()
-	Readline() (string, error)
+	Sources() []File
+	Readline() (line string, src SourceID, err error)
 }
 
-func NewReader(lcfg *LoonConfig, path string, stdin bool) (Reader, error) {
+type SourceID uint32
+
+var huecolor noire.Color = noire.NewRGB(235, 0, 0)
+
+func (sid SourceID) Color(shade float64) tcell.Color {
+	hue := huecolor.AdjustHue(float64(sid%72) * 5).Shade(shade)
+	return tcell.NewRGBColor(int32(hue.Red), int32(hue.Green), int32(hue.Blue))
+}
+
+type File struct {
+	ID    SourceID
+	Path  string
+	Stdin bool
+}
+
+func NewFile(path string, stdin bool) (f File) {
+	f.Path = path
+	f.Stdin = stdin
+	f.ID = SourceID(hashString(path))
+	return
+}
+
+func NewReader(lcfg *LoonConfig, f File) (Reader, error) {
 	size := lcfg.RingSize
 
-	if stdin {
-		reader := &PipeReader{
-			lines:  0,
-			reader: bufio.NewReader(os.Stdin),
-		}
-
-		return reader, nil
-	}
-
 	var cursor int64
-	if _, err := os.Stat(path); err == nil {
-		cursor, err = getPostionFromBottom(path, int64(size))
-		if err != nil {
-			return nil, fmt.Errorf("unable to seek file position: %w", err)
+	if !f.Stdin {
+		if _, err := os.Stat(f.Path); err == nil {
+			cursor, err = getPostionFromBottom(f.Path, int64(size))
+			if err != nil {
+				return nil, fmt.Errorf("unable to seek file position: %w", err)
+			}
 		}
 	}
 
-	tail, err := tailFile(cursor, path, stdin)
+	tail, err := tailFile(cursor, f)
 	if err != nil {
 		return nil, fmt.Errorf("unable to tail file: %w", err)
 	}
 
-	return &FileReader{
+	return &TailReader{
 		lines: 0,
+		file:  f,
 		tail:  tail,
 	}, nil
 }
 
-func tailFile(cursor int64, path string, stdin bool) (*tail.Tail, error) {
+func tailFile(cursor int64, f File) (*tail.Tail, error) {
 	config := tail.Config{
 		ReOpen: true,
 		Follow: true,
 		Logger: tail.DiscardingLogger,
+		Pipe:   f.Stdin,
 	}
 
-	if stdin {
-		path = os.Stdin.Name()
-		config.Pipe = stdin
-	} else if path != "" {
+	if f.Stdin {
+		f.Path = os.Stdin.Name()
+		config.Pipe = f.Stdin
+	} else if f.Path != "" {
 		config.Location = &tail.SeekInfo{Offset: cursor}
 	} else {
 		return nil, fmt.Errorf("no valid path given")
 	}
 
-	return tail.TailFile(path, config)
+	return tail.TailFile(f.Path, config)
 }
 
 func getPostionFromBottom(path string, lines int64) (int64, error) {
@@ -104,60 +123,36 @@ func getPostionFromBottom(path string, lines int64) (int64, error) {
 
 }
 
-type PipeReader struct {
-	reader *bufio.Reader
-	lines  int
-
-	muLines sync.RWMutex
-}
-
-func (p *PipeReader) Readline() (string, error) {
-	text, err := p.reader.ReadString('\n')
-	if err != nil {
-		return "", err
-	}
-
-	p.muLines.Lock()
-	p.lines++
-	p.muLines.Unlock()
-
-	return strings.TrimSuffix(text, "\n"), nil
-}
-
-func (p *PipeReader) Lines() (l int) {
-	p.muLines.RLock()
-	l = p.lines
-	p.muLines.RUnlock()
-	return
-}
-
-func (p *PipeReader) ResetLines() {
-	p.muLines.Lock()
-	p.lines = 0
-	p.muLines.Unlock()
-}
-
-type FileReader struct {
+type TailReader struct {
 	tail  *tail.Tail
 	lines int
+	file  File
 
 	muLines sync.RWMutex
 }
 
-func (f *FileReader) Lines() (l int) {
+func (f *TailReader) Lines() (l int) {
 	f.muLines.RLock()
 	l = f.lines
 	f.muLines.RUnlock()
 	return
 }
 
-func (f *FileReader) ResetLines() {
+func (f *TailReader) Sources() (src []File) {
+	f.muLines.RLock()
+	src = []File{f.file}
+	f.muLines.RUnlock()
+	return
+}
+
+func (f *TailReader) ResetLines() {
 	f.muLines.Lock()
 	f.lines = 0
 	f.muLines.Unlock()
 }
 
-func (f *FileReader) Readline() (s string, err error) {
+func (f *TailReader) Readline() (s string, sid SourceID, err error) {
+	sid = f.file.ID
 	line := <-f.tail.Lines
 	if line != nil {
 		f.muLines.Lock()
@@ -172,5 +167,94 @@ func (f *FileReader) Readline() (s string, err error) {
 		err = io.EOF
 	}
 
+	return
+}
+
+type multiReaderSource struct {
+	sid  SourceID
+	line string
+	err  error
+}
+
+type MultiReader struct {
+	rootCtx context.Context
+
+	readers  []Reader
+	sources  []File
+	cline    chan *multiReaderSource
+	muReader sync.RWMutex
+}
+
+func NewMultiReader(readers ...Reader) *MultiReader {
+	wg := sync.WaitGroup{}
+	cline := make(chan *multiReaderSource)
+	for _, reader := range readers {
+		wg.Add(1)
+		go func(reader Reader) {
+			defer wg.Done()
+			for {
+				line, sid, err := reader.Readline()
+				cline <- &multiReaderSource{
+					sid:  sid,
+					line: line,
+					err:  err,
+				}
+
+				if err != nil {
+					return
+				}
+			}
+		}(reader)
+	}
+
+	go func() {
+		wg.Wait()
+		close(cline)
+	}()
+
+	sources := []File{}
+	for _, reader := range readers {
+		sources = append(sources, reader.Sources()...)
+	}
+
+	return &MultiReader{
+		readers: readers,
+		cline:   cline,
+		sources: sources,
+	}
+}
+
+func (m *MultiReader) Lines() (l int) {
+	m.muReader.RLock()
+	for _, r := range m.readers {
+		l += r.Lines()
+	}
+
+	m.muReader.RUnlock()
+	return
+}
+
+func (m *MultiReader) Sources() (src []File) {
+	m.muReader.RLock()
+	src = m.sources
+	m.muReader.RUnlock()
+	return
+}
+
+func (m *MultiReader) ResetLines() {
+	m.muReader.Lock()
+	for _, r := range m.readers {
+		r.ResetLines()
+	}
+	m.muReader.Unlock()
+}
+
+func (m *MultiReader) Readline() (s string, sid SourceID, err error) {
+	if source := <-m.cline; source != nil {
+		s, sid, err = source.line, source.sid, source.err
+		return
+	}
+
+	err = fmt.Errorf("no more reader to read")
 	return
 }
