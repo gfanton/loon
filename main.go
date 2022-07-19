@@ -17,7 +17,7 @@ type LoonConfig struct {
 	RingSize   int
 	LineSize   int
 	ConfigFile string
-	Json       bool
+	// Json       bool
 
 	// color
 	NoColor       bool
@@ -40,13 +40,13 @@ func parseRootConfig(args []string) (*LoonConfig, error) {
 
 	rootFlagSet.StringVar(&cfg.ConfigFile, "config", defaultLoonConfig, "root config project")
 
-	rootFlagSet.BoolVar(&cfg.Json, "json", false, "parsed is a json line file")
 	rootFlagSet.BoolVar(&cfg.NoColor, "nocolor", false, "disable color")
 	rootFlagSet.BoolVar(&cfg.NoAnsi, "noansi", false, "do not parse ansi sequence")
 	rootFlagSet.BoolVar(&cfg.BgSourceColor, "bgcolor", false, "enable background color on multiple sources")
 	rootFlagSet.BoolVar(&cfg.FgSourceColor, "fgcolor", true, "enable forground color on multiple sources")
 	rootFlagSet.IntVar(&cfg.RingSize, "ringsize", 100000, "ring line capacity")
-	rootFlagSet.IntVar(&cfg.LineSize, "linesize", 10000, "max line size")
+	rootFlagSet.IntVar(&cfg.LineSize, "linesize", 10000, "If non-zero, split longer lines into multiple lines")
+	// rootFlagSet.BoolVar(&cfg.Json, "json", false, "parsed is a json line file") // @TODO
 	// rootFlagSet.BoolVar(&cfg.Debug, "debug", false, "debug mode") // @TODO
 
 	err := ff.Parse(rootFlagSet, args,
