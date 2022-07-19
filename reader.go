@@ -54,7 +54,7 @@ func NewReader(lcfg *LoonConfig, f File) (Reader, error) {
 		}
 	}
 
-	tail, err := tailFile(cursor, f)
+	tail, err := tailFile(lcfg, cursor, f)
 	if err != nil {
 		return nil, fmt.Errorf("unable to tail file: %w", err)
 	}
@@ -66,12 +66,13 @@ func NewReader(lcfg *LoonConfig, f File) (Reader, error) {
 	}, nil
 }
 
-func tailFile(cursor int64, f File) (*tail.Tail, error) {
+func tailFile(lcfg *LoonConfig, cursor int64, f File) (*tail.Tail, error) {
 	config := tail.Config{
-		ReOpen: true,
-		Follow: true,
-		Logger: tail.DiscardingLogger,
-		Pipe:   f.Stdin,
+		ReOpen:      true,
+		Follow:      true,
+		MaxLineSize: lcfg.LineSize,
+		Logger:      tail.DiscardingLogger,
+		Pipe:        f.Stdin,
 	}
 
 	if f.Stdin {
