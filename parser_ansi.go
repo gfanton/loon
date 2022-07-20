@@ -68,6 +68,10 @@ func (l *ANSILine) printSeqs(p Printer, content []byte, x, y, width, offset int)
 }
 
 func (l *ANSILine) printMarks(p Printer, content []byte, x, y, width, offset int) {
+	if offset < 0 {
+		offset = 0
+	}
+
 	for _, m := range l.marks {
 		from, to := m.Off, m.Off+m.Len
 		if offset >= to || from > (width+offset) {
@@ -80,6 +84,7 @@ func (l *ANSILine) printMarks(p Printer, content []byte, x, y, width, offset int
 
 		str := content[from:to]
 		style := tcell.StyleDefault.Background(getMarkColor(m.N)).Reverse(true).Bold(true)
+
 		p.Print(x+from-offset, y, style, string(str))
 	}
 }
