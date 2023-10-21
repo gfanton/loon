@@ -1,6 +1,6 @@
 module github.com/gfanton/loon
 
-go 1.18
+go 1.20
 
 require (
 	github.com/gdamore/tcell/v2 v2.5.1
